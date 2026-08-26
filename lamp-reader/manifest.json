@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Lamp — Đọc nhanh RSVP",
+  "version": "1.3.0",
+  "description": "Đọc nhanh bất kỳ trang web hoặc file PDF nào bằng kỹ thuật RSVP. Nhấn Alt+R để bắt đầu.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Lamp — Đọc nhanh",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "commands": {
+    "toggle-reader": {
+      "suggested_key": {
+        "default": "Alt+R"
+      },
+      "description": "Bật/tắt trình đọc nhanh trên trang hiện tại"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/overlay.css",
+        "viewer/viewer.html",
+        "vendor/pdf.mjs",
+        "vendor/pdf.worker.mjs",
+        "fonts/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

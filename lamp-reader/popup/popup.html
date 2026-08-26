@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    width: 300px;
+    margin: 0;
+    padding: 18px;
+    background: #0e1220;
+    color: #ece7dd;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; }
+  .brand h1 { font-family: Georgia, serif; font-size: 20px; margin: 0; font-weight: 600; }
+  .brand span {
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #f2a93b;
+  }
+  .sub { font-size: 12px; color: #8c8fa3; margin: 5px 0 16px; line-height: 1.5; }
+
+  button.start, button.pdf {
+    width: 100%;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform .08s, border-color .15s, background .15s;
+  }
+  button.start:active, button.pdf:active { transform: scale(.985); }
+
+  button.start {
+    padding: 13px;
+    border: none;
+    background: #f2a93b;
+    color: #1a1206;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  button.pdf {
+    margin-top: 9px;
+    padding: 12px;
+    border: 1px solid #2c3252;
+    background: #1a1f36;
+    color: #ece7dd;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  button.pdf:hover { border-color: #f2a93b; background: #232945; }
+
+  .err { color: #e06b6b; font-size: 12px; margin-top: 9px; min-height: 15px; line-height: 1.45; }
+
+  .panel {
+    margin-top: 14px;
+    padding: 14px;
+    background: #1a1f36;
+    border: 1px solid #2c3252;
+    border-radius: 14px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .row + .row { margin-top: 11px; }
+  .row-label { font-size: 13px; color: #8c8fa3; }
+
+  .stepper-box {
+    display: flex;
+    align-items: center;
+    background: #0e1220;
+    border: 1px solid #2c3252;
+    border-radius: 11px;
+    overflow: hidden;
+  }
+  .stepper-box button {
+    width: 38px; height: 38px;
+    border: none;
+    background: transparent;
+    color: #ece7dd;
+    font-size: 19px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .stepper-box button:hover { background: #232945; color: #f2a93b; }
+  .stepper-box .val {
+    min-width: 64px;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-left: 1px solid #2c3252;
+    border-right: 1px solid #2c3252;
+    font-variant-numeric: tabular-nums;
+  }
+  .stepper-box .val b { font-size: 15px; font-weight: 600; }
+  .stepper-box .val em { font-style: normal; font-size: 10px; color: #8c8fa3; }
+
+  .foot {
+    margin-top: 13px;
+    font-size: 11.5px;
+    color: #6f7286;
+    line-height: 1.65;
+  }
+  .foot b { color: #8c8fa3; font-weight: 600; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <h1>Lamp</h1>
+    <span>RSVP</span>
+  </div>
+  <div class="sub">Đọc nhanh trang hiện tại, đoạn đang bôi đen, hoặc một file PDF.</div>
+
+  <button class="start" id="start">Đọc trang này</button>
+  <button class="pdf" id="openPdf">Đọc file PDF…</button>
+  <div class="err" id="err"></div>
+
+  <div class="panel">
+    <div class="row">
+      <span class="row-label">Tốc độ</span>
+      <div class="stepper-box">
+        <button data-step="wpm:-1" aria-label="Giảm tốc độ">−</button>
+        <span class="val"><b id="wpmVal">350</b><em>WPM</em></span>
+        <button data-step="wpm:1" aria-label="Tăng tốc độ">+</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="row-label">Từ mỗi lần</span>
+      <div class="stepper-box">
+        <button data-step="chunk:-1" aria-label="Giảm số từ">−</button>
+        <span class="val"><b id="chunkVal">1</b></span>
+        <button data-step="chunk:1" aria-label="Tăng số từ">+</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="row-label">Cỡ chữ</span>
+      <div class="stepper-box">
+        <button data-step="size:-1" aria-label="Giảm cỡ chữ">−</button>
+        <span class="val"><b id="sizeVal">56</b><em>px</em></span>
+        <button data-step="size:1" aria-label="Tăng cỡ chữ">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Alt+R</b> mở nhanh trên mọi trang. Bôi đen một đoạn rồi chuột phải để đọc riêng đoạn đó.<br>
+    Phông chữ, giao diện và các tuỳ chọn khác nằm ở nút <b>⚙</b> trong trình đọc.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
