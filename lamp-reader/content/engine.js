@@ -46,7 +46,7 @@
 
   // ---------- Nhịp ----------
   function tokenDelay(token, i, tokens, opts) {
-    const { wpm, rhythm, warmup, vietnamese } = opts;
+    const { wpm, rhythm, warmup, vietnamese, shortWords } = opts;
 
     let rate = wpm;
     if (warmup && i < 40) rate = wpm * (0.65 + 0.35 * (i / 40));
@@ -55,6 +55,12 @@
 
     const wordCount = token.text.split(" ").length;
     let ms = (60000 / rate) * wordCount;
+
+    // Từ đệm (và, của, là...) mang ít thông tin — cho lướt qua nhanh hơn thay
+    // vì buộc mắt dừng lại bằng đúng thời lượng một từ có nghĩa.
+    if (shortWords && wordCount === 1 && STOP.has(clean(token.text).toLowerCase())) {
+      ms *= 0.6;
+    }
 
     if (rhythm) {
       if (CLAUSE_END.test(token.text)) {

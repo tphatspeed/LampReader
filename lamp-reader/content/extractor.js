@@ -89,10 +89,13 @@
     return blocks;
   }
 
-  window.__lampExtract = function extract() {
-    // Ưu tiên: nếu người dùng đang bôi đen một đoạn, đọc đúng đoạn đó
-    const sel = (window.getSelection()?.toString() || "").trim();
-    if (sel.length > 40) {
+  window.__lampExtract = function extract(forceSelection) {
+    // Chỉ ưu tiên đoạn bôi đen khi người dùng chủ động chọn "Đọc nhanh đoạn
+    // này bằng Lamp" từ menu chuột phải. Nếu không, Alt+R / nút trong popup
+    // luôn đọc toàn trang — kể cả khi trang đang có sẵn một đoạn bôi đen sót
+    // lại từ thao tác khác (copy, bôi để xem thử...).
+    if (forceSelection) {
+      const sel = (window.getSelection()?.toString() || "").trim();
       return {
         title: document.title,
         source: "selection",

@@ -18,7 +18,9 @@ const DEFAULTS = {
   warmup: false,
   tts: false,
   voiceURI: "",
-  restReminder: true
+  restReminder: true,
+  bionic: false,
+  shortWords: false
 };
 
 const MENU_ID = "lamp-read-selection";
@@ -36,7 +38,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   });
 });
 
-async function launchReader(tabId, url) {
+async function launchReader(tabId, url, forceSelection = false) {
   if (!url || /^(chrome|edge|about|chrome-extension|devtools|view-source):/.test(url)) {
     return { ok: false, reason: "internal-page" };
   }
@@ -57,7 +59,7 @@ async function launchReader(tabId, url) {
       files: ["content/extractor.js", "content/engine.js", "content/reader.js"]
     });
     const settings = await chrome.storage.sync.get(DEFAULTS);
-    await chrome.tabs.sendMessage(tabId, { type: "LAMP_TOGGLE", settings });
+    await chrome.tabs.sendMessage(tabId, { type: "LAMP_TOGGLE", settings, forceSelection });
     return { ok: true };
   } catch (err) {
     return { ok: false, reason: err.message };
@@ -71,7 +73,8 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === MENU_ID && tab) launchReader(tab.id, tab.url);
+  // true = chỉ đọc đúng đoạn đang bôi đen, không đọc cả trang
+  if (info.menuItemId === MENU_ID && tab) launchReader(tab.id, tab.url, true);
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

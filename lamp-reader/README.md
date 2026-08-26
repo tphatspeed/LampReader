@@ -20,9 +20,9 @@ Trình đọc **không tự chạy** khi mở — nó dừng sẵn ở từ đ�
 
 | Thao tác | Kết quả |
 |---|---|
-| `Alt+R` | Mở trình đọc trên trang hiện tại (ở trạng thái dừng) |
+| `Alt+R` | Mở trình đọc trên trang hiện tại (ở trạng thái dừng), luôn đọc cả trang |
 | Bấm icon Lamp | Popup: đọc trang này, đọc file PDF, chỉnh tốc độ/số từ/cỡ chữ |
-| Bôi đen đoạn văn → chuột phải | "Đọc nhanh đoạn này bằng Lamp" |
+| Bôi đen đoạn văn → chuột phải | "Đọc nhanh đoạn này bằng Lamp" — chỉ đọc đúng đoạn đã chọn |
 | `Space` | Phát / dừng |
 | Bấm vào vùng chữ | Phát / dừng (vùng bấm lớn, tiện trên điện thoại) |
 | `←` / `→` | Lùi / tiến 10 từ |
@@ -49,6 +49,12 @@ là đọc tiếp chỗ cũ.
 hai thứ mà RSVP lấy mất: khả năng đọc lại và khả năng nhìn trước từ kế tiếp — nên
 đây mới là chế độ dùng cho nội dung bạn cần thật sự hiểu.
 
+Ở chế độ RSVP, mỗi lần dừng (`Space`, kéo thanh tiến độ, lùi/tiến...) trình đọc
+tự hiện toàn bộ văn bản kèm vị trí đang đọc được tô sáng, giống hệt chế độ Dẫn
+dòng — giúp nắm lại mạch bài trước khi đọc tiếp. Bấm vào một từ bất kỳ trong lúc
+này để nhảy thẳng tới đó; bấm `Space` hoặc chỗ trống để đọc tiếp là màn hình
+quay lại hiện từng từ như bình thường.
+
 ### Dàn bài (nút danh sách, phím `O`)
 
 Liệt kê toàn bộ tiêu đề mục của trang kèm vị trí phần trăm. Bấm vào là nhảy thẳng
@@ -65,13 +71,15 @@ Với tiếng Việt, ứng dụng khoét cả cụm hai âm tiết thay vì m�
 
 ### Bảng cài đặt (nút ⚙)
 
-- **Phông chữ** — Hệ thống, Be Vietnam, Tahoma, Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy
+- **Phông chữ** — Hệ thống, Be Vietnam, Tahoma, Serif (Literata), Noto Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy
 - **Giao diện** — Giấy, Sepia, Xám, Đêm, Tương phản cao (đo theo WCAG: chữ/nền ≥ 7:1)
 - **Giãn chữ** — nới khoảng cách giữa các ký tự, 0–12px
 - **Giọng đọc** — bật text-to-speech, chữ chạy theo giọng qua sự kiện `onboundary`; chọn được giọng, tự ưu tiên giọng cùng ngôn ngữ với bài
 - **Tô chữ trung tâm (ORP)** — điểm neo mắt, có thêm gạch chân nên không phụ thuộc riêng vào màu
+- **Chế độ Bionic** — in đậm khoảng 45% đầu mỗi từ thay cho tô điểm neo, mắt bắt phần đầu rồi não tự đoán phần còn lại
 - **Thanh dẫn** — hai vạch canh vị trí mắt
 - **Nhịp dấu câu** — dừng cuối câu, câu càng dài dừng càng lâu
+- **Bỏ qua từ ngắn** — từ đệm ít nghĩa (và, của, là...) hiện nhanh hơn 40%, dồn thời gian cho từ mang nội dung
 - **Xem ngữ cảnh** — hiện các từ xung quanh, mờ hơn
 - **Khởi động chậm** — 40 cụm đầu chạy ở 65% tốc độ rồi tăng dần
 - **Nhắc nghỉ mắt** — cứ 20 phút đọc thì dừng, đếm ngược 20 giây (quy tắc 20-20-20)
@@ -134,8 +142,10 @@ lamp-reader/
 | Muốn thay đổi | Sửa file |
 |---|---|
 | Thuật toán tách nội dung chính | `content/extractor.js`, hàm `scoreNode` |
-| Thời gian dừng ở dấu câu | `content/reader.js`, hàm `delayFor` |
-| Vị trí chấm ORP | `content/reader.js`, hàm `pivotIndex` |
+| Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
+| Vị trí chấm ORP / độ dài bôi đậm Bionic | `content/reader.js`, hàm `pivotIndex` / `bionicSplit` |
+| Nội dung focus view khi RSVP dừng | `content/reader.js`, hàm `updateFocusOverlay`, `paintBlocksInto` |
+| Phông chữ nhúng sẵn (Be Vietnam, Serif, Noto Serif) | `content/overlay.css`, các khối `@font-face`; xem `fonts/README.txt` |
 | Màu sắc, theme, bố cục responsive | `content/overlay.css` |
 | Cách ghép dòng PDF thành đoạn | `viewer/viewer.js`, hàm `itemsToParagraphs` |
 | Phím tắt mặc định | `manifest.json`, mục `commands` |
@@ -144,8 +154,7 @@ Sau mỗi lần sửa: vào `chrome://extensions` → bấm **Reload** trên th�
 
 ## Ý tưởng mở rộng
 
-- **Text-to-speech**: dùng Web Speech API (`speechSynthesis`) để nghe song song.
-- **Lưu tiến trình**: ghi `{url, idx}` vào `chrome.storage.local`, đọc tiếp lần sau.
-- **Thống kê**: đếm tổng số từ đã đọc mỗi ngày, hiển thị trong popup.
-- **Chế độ bionic**: in đậm nửa đầu mỗi từ thay vì chỉ tô một ký tự.
-- **Bỏ qua từ ngắn**: các từ như "và", "của", "là" hiển thị nhanh hơn.
+- **Tính thời lượng theo âm tiết thay vì ký tự** — với tiếng Việt, thời gian hiện
+  một cụm hiện tính theo độ dài chuỗi ký tự (`content/engine.js`, `tokenDelay`);
+  chính xác hơn nếu tính theo số âm tiết thật, vì độ dài ký tự không phản ánh
+  đúng số "nhịp" cần đọc.

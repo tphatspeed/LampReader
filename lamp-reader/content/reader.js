@@ -24,7 +24,9 @@
     warmup: false,
     tts: false,
     voiceURI: "",
-    restReminder: true
+    restReminder: true,
+    bionic: false,
+    shortWords: false
   };
 
   const STEP = { wpm: 50, chunk: 1, size: 4, spacing: 1 };
@@ -37,6 +39,7 @@
     vietnam: { label: "Be Vietnam", stack: '"Lamp Vietnam", "Be Vietnam Pro", "Be Vietnam", system-ui, sans-serif' },
     tahoma: { label: "Tahoma", stack: 'Tahoma, Verdana, Geneva, sans-serif' },
     serif: { label: "Serif", stack: '"Lamp Serif", Literata, Cambria, Charter, "Times New Roman", Times, serif' },
+    notoserif: { label: "Noto Serif", stack: '"Lamp Noto Serif", "Noto Serif", Georgia, serif' },
     mono: { label: "Mono", stack: 'Consolas, "SF Mono", "Roboto Mono", "Courier New", monospace' },
     custom: { label: "Tuỳ chỉnh", stack: "" }
   };
@@ -97,11 +100,24 @@
     return 4;
   }
 
+  // Bionic: in đậm khoảng 45% đầu mỗi từ — mắt chỉ cần bắt phần đầu, não tự
+  // đoán phần còn lại. Thay thế cho ORP (tô một điểm neo) chứ không cộng dồn.
+  function bionicSplit(n) {
+    if (n <= 1) return n;
+    if (n <= 3) return Math.ceil(n / 2);
+    return Math.ceil(n * 0.45);
+  }
+  function bionicHTML(w) {
+    const n = bionicSplit(w.length);
+    return `<b class="bionic">${esc(w.slice(0, n))}</b>${esc(w.slice(n))}`;
+  }
+
   const pacing = () => ({
     wpm: state.wpm,
     rhythm: state.rhythm,
     warmup: state.warmup,
-    vietnamese: state.vietnamese
+    vietnamese: state.vietnamese,
+    shortWords: state.shortWords
   });
 
   // ============================ GIAO DIỆN ============================
@@ -158,6 +174,7 @@
             <div class="context" id="context"></div>
           </div>
           <div class="guide-view" id="guideView" hidden></div>
+          <div class="focus-view" id="focusView" hidden></div>
           <div class="ready" id="ready">Nhấn <kbd>Space</kbd> để bắt đầu</div>
         </div>
 
@@ -224,8 +241,10 @@
             </div>
             <div class="group">
               ${toggle("orp", "Tô chữ trung tâm", "Điểm neo mắt, giúp nhận diện từ nhanh hơn")}
+              ${toggle("bionic", "Chế độ Bionic", "In đậm nửa đầu mỗi từ, thay cho tô điểm neo")}
               ${toggle("ruler", "Thanh dẫn", "Hai vạch canh vị trí mắt")}
               ${toggle("rhythm", "Nhịp dấu câu", "Dừng lâu hơn ở cuối câu, câu dài dừng lâu hơn")}
+              ${toggle("shortWords", "Bỏ qua từ ngắn", "Từ đệm như “và”, “của”, “là” lướt nhanh hơn")}
               ${toggle("context", "Xem ngữ cảnh", "Hiện các từ xung quanh, mờ hơn")}
               ${toggle("warmup", "Khởi động chậm", "40 cụm đầu chạy ở 65% tốc độ rồi tăng dần")}
               ${toggle("restReminder", "Nhắc nghỉ mắt", "Cứ 20 phút nhắc nhìn xa 20 giây")}
@@ -347,7 +366,7 @@
       applyStyle(); syncControls(); save();
     });
 
-    ["orp", "ruler", "rhythm", "context", "warmup", "restReminder", "tts"].forEach((k) =>
+    ["orp", "bionic", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach((k) =>
       $("#" + k).addEventListener("change", (e) => {
         state[k] = e.target.checked;
         if (k === "tts") { stopSpeech(); syncControls(); if (state.playing) { pause(); play(); } }
@@ -368,7 +387,7 @@
       panel("#outline", false);
     });
 
-    $("#guideView").addEventListener("click", (e) => {
+    const jumpToGuideWord = (e) => {
       const w = e.target.closest(".guide-word");
       if (!w) return;
       e.stopPropagation();
@@ -376,7 +395,9 @@
         (tk) => tk.block === +w.dataset.b && +w.dataset.w >= tk.from && +w.dataset.w <= tk.to
       );
       if (t >= 0) jumpTo(t);
-    });
+    };
+    $("#guideView").addEventListener("click", jumpToGuideWord);
+    $("#focusView").addEventListener("click", jumpToGuideWord);
 
     $("#restSkip").addEventListener("click", endRest);
 
@@ -446,8 +467,10 @@
     syncControls(); render(); save();
   }
 
-  // Dựng toàn bộ văn bản, mỗi từ một <span> để tô sáng đúng vị trí
-  function paintGuide() {
+  // Dựng toàn bộ văn bản, mỗi từ một <span> để tô sáng đúng vị trí.
+  // Dùng chung cho chế độ Dẫn dòng (#guideView) và focus view khi RSVP dừng
+  // (#focusView) — cùng cấu trúc từ/khối nên tô sáng theo đúng một hàm.
+  function paintBlocksInto(container) {
     const html = state.blocks
       .map((b, bi) => {
         const words = b.text.split(/\s+/).filter(Boolean);
@@ -459,18 +482,17 @@
         return `<${tag}${cls} data-block="${bi}">${inner}</${tag}>`;
       })
       .join("");
-    $("#guideView").innerHTML = html;
+    container.innerHTML = html;
   }
 
-  function highlightGuide() {
+  function highlightInto(container) {
     const t = state.tokens[state.idx];
     if (!t) return;
-    const view = $("#guideView");
-    view.querySelectorAll(".guide-word.on").forEach((el) => el.classList.remove("on"));
-    view.querySelectorAll(".guide-word.past").forEach((el) => el.classList.remove("past"));
+    container.querySelectorAll(".guide-word.on").forEach((el) => el.classList.remove("on"));
+    container.querySelectorAll(".guide-word.past").forEach((el) => el.classList.remove("past"));
 
     let first = null;
-    view.querySelectorAll(".guide-word").forEach((el) => {
+    container.querySelectorAll(".guide-word").forEach((el) => {
       const b = +el.dataset.b, w = +el.dataset.w;
       if (b < t.block || (b === t.block && w < t.from)) el.classList.add("past");
       else if (b === t.block && w >= t.from && w <= t.to) {
@@ -480,10 +502,28 @@
     });
     if (first) {
       const r = first.getBoundingClientRect();
-      const vr = view.getBoundingClientRect();
+      const vr = container.getBoundingClientRect();
       if (r.top < vr.top + vr.height * 0.3 || r.bottom > vr.top + vr.height * 0.7) {
         first.scrollIntoView({ block: "center", behavior: state.wpm > 500 ? "auto" : "smooth" });
       }
+    }
+  }
+
+  function paintGuide() { paintBlocksInto($("#guideView")); }
+  function highlightGuide() { highlightInto($("#guideView")); }
+
+  // RSVP dừng lại → hiện toàn văn bản kèm vị trí đang đọc, để nắm lại mạch
+  // bài trước khi đọc tiếp. Chỉ vẽ lại HTML lúc mới hiện ra (đỡ tốn khi kéo
+  // thanh tiến độ liên tục), các lần sau chỉ cập nhật phần tô sáng.
+  function updateFocusOverlay() {
+    const fv = $("#focusView");
+    const show = state.mode === "rsvp" && state.started && !state.playing;
+    if (show) {
+      if (fv.hidden) paintBlocksInto(fv);
+      fv.hidden = false;
+      highlightInto(fv);
+    } else {
+      fv.hidden = true;
     }
   }
 
@@ -493,6 +533,7 @@
     const bd = $(".backdrop");
     bd.dataset.theme = state.theme;
     bd.dataset.orp = state.orp ? "on" : "off";
+    bd.dataset.bionic = state.bionic ? "on" : "off";
     bd.dataset.ruler = state.ruler ? "on" : "off";
     const stack = state.fontFamily === "custom"
       ? (state.customFont ? `"${state.customFont}", system-ui, sans-serif` : "system-ui, sans-serif")
@@ -514,7 +555,7 @@
     $$("[data-font]").forEach((b) => b.classList.toggle("on", b.dataset.font === state.fontFamily));
     $$("[data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === state.theme));
     $$("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
-    ["orp", "ruler", "rhythm", "context", "warmup", "restReminder", "tts"].forEach(
+    ["orp", "bionic", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach(
       (k) => ($("#" + k).checked = state[k])
     );
   }
@@ -527,7 +568,10 @@
       const parts = text.split(" ");
       const first = parts[0] || "";
       let html;
-      if (state.orp) {
+      if (state.bionic) {
+        html = bionicHTML(first) +
+          (parts.length > 1 ? " " + esc(parts.slice(1).join(" ")) : "");
+      } else if (state.orp) {
         const pi = pivotIndex(first);
         html = esc(first.slice(0, pi)) +
           `<span class="pivot">${esc(first.slice(pi, pi + 1))}</span>` +
@@ -562,6 +606,7 @@
     else { z.dataset.zone = "scan"; z.textContent = "chỉ quét ý"; }
 
     $("#ready").hidden = state.started;
+    updateFocusOverlay();
   }
 
   // ============================ VÒNG CHẠY ============================
@@ -607,6 +652,7 @@
     state.lastTick = Date.now();
     $("#ready").hidden = true;
     setPlayIcon(true);
+    updateFocusOverlay();
     state.tts ? startSpeech() : schedule();
   }
 
@@ -616,7 +662,7 @@
     state.lastTick = 0;
     clearTimeout(state.timer);
     stopSpeech();
-    if (state.root) setPlayIcon(false);
+    if (state.root) { setPlayIcon(false); updateFocusOverlay(); }
     saveProgress();
   }
 
@@ -889,16 +935,18 @@
 
   // ============================ VÒNG ĐỜI ============================
 
-  async function open(settings) {
+  async function open(settings, forceSelection) {
     Object.keys(DEFAULTS).forEach((k) => {
       if (settings && settings[k] !== undefined) state[k] = settings[k];
     });
 
-    const ex = window.__lampExtract();
+    const ex = window.__lampExtract(forceSelection);
     const blocks = ex.blocks || [];
     const joined = blocks.map((b) => b.text).join(" ");
     if (joined.trim().length < 40) {
-      alert("Lamp: không tìm thấy nội dung đủ dài trên trang này.\nHãy bôi đen đoạn văn bạn muốn đọc rồi thử lại.");
+      alert(forceSelection
+        ? "Lamp: đoạn bạn bôi đen quá ngắn hoặc chưa chọn gì. Hãy tô đen đoạn văn muốn đọc rồi thử lại."
+        : "Lamp: không tìm thấy nội dung đủ dài trên trang này.\nThử bôi đen đoạn văn muốn đọc rồi bấm chuột phải chọn “Đọc nhanh đoạn này bằng Lamp”.");
       return;
     }
 
@@ -917,11 +965,14 @@
     state.open = true;
     ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
     $("#rest").hidden = true;
+    $("#focusView").hidden = true;
 
     state.idx = await loadProgress();
     if (state.idx > 0) state.started = true;
 
-    $("#docTitle").textContent = ex.title || "";
+    $("#docTitle").textContent = ex.source === "selection"
+      ? "Đoạn đã chọn" + (ex.title ? " · " + ex.title : "")
+      : (ex.title || "");
     $("#rsvpView").hidden = state.mode !== "rsvp";
     $("#guideView").hidden = state.mode !== "guide";
     if (state.mode === "guide") paintGuide();
@@ -953,13 +1004,13 @@
 
   window.__lampReader = {
     open, close,
-    toggle: (s) => (state.open ? close() : open(s))
+    toggle: (s, forceSelection) => (state.open ? close() : open(s, forceSelection))
   };
 
   if (chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg.type !== "LAMP_TOGGLE") return;
-      window.__lampReader.toggle(msg.settings);
+      window.__lampReader.toggle(msg.settings, msg.forceSelection);
     });
   }
 })();

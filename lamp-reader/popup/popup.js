@@ -16,7 +16,9 @@ const DEFAULTS = {
   warmup: false,
   tts: false,
   voiceURI: "",
-  restReminder: true
+  restReminder: true,
+  bionic: false,
+  shortWords: false
 };
 
 const STEP = { wpm: 50, chunk: 1, size: 4 };

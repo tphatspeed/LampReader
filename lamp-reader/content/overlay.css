@@ -539,7 +539,7 @@ kbd {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sheet { animation: none; }
+  .sheet, .focus-view { animation: none; }
   .switch-ui::after { transition: none; }
 }
 
@@ -769,7 +769,7 @@ kbd {
 .text-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 @media (max-width: 680px) {
-  .guide-view { padding: 6vh 16px; font-size: 17px; line-height: 1.8; }
+  .guide-view, .focus-view { padding: 6vh 16px; font-size: 17px; line-height: 1.8; }
   .modebar .seg { min-width: 74px; }
   .stats { display: flex; flex-direction: column; }
 
@@ -778,17 +778,86 @@ kbd {
 
 /* ==================== Phông tuỳ chọn thả vào fonts/ ====================
    Nếu file không tồn tại, trình duyệt bỏ qua và dùng phông kế tiếp trong
-   ngăn xếp. Xem fonts/README.txt để biết cách thêm.                      */
+   ngăn xếp. Xem fonts/README.txt để biết cách thêm — thư mục tải thẳng từ
+   Google Fonts (giữ nguyên tên) là dùng được luôn, không cần đổi tên file. */
 
 @font-face {
   font-family: "Lamp Vietnam";
-  src: url("__LAMP_EXT__fonts/bevietnampro.woff2") format("woff2");
+  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lamp Vietnam";
+  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lamp Vietnam";
+  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lamp Serif";
+  src: url("__LAMP_EXT__fonts/Literata/Literata-VariableFont_opsz,wght.ttf") format("truetype");
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Lamp Serif";
-  src: url("__LAMP_EXT__fonts/reading-serif.woff2") format("woff2");
+  font-style: italic;
+  src: url("__LAMP_EXT__fonts/Literata/Literata-Italic-VariableFont_opsz,wght.ttf") format("truetype");
   font-weight: 100 900;
   font-display: swap;
 }
+@font-face {
+  font-family: "Lamp Noto Serif";
+  src: url("__LAMP_EXT__fonts/Noto_Serif/NotoSerif-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Lamp Noto Serif";
+  font-style: italic;
+  src: url("__LAMP_EXT__fonts/Noto_Serif/NotoSerif-Italic-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* ==================== Bionic — in đậm nửa đầu mỗi từ ==================== */
+
+.backdrop[data-bionic="on"] .word { font-weight: 400; }
+.word .bionic { font-weight: 800; }
+
+/* ==================== Focus view — hiện toàn văn khi dừng ====================
+   Chỉ dùng ở chế độ RSVP. Đè lên trên từ đơn khi đang dừng, để người đọc
+   nắm lại ngữ cảnh trước khi đọc tiếp — dùng lại đúng kiểu chữ/tô sáng của
+   chế độ Dẫn dòng nên trông nhất quán.                                    */
+
+.focus-view {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  padding: 8vh 22px;
+  background: var(--bg);
+  font-family: var(--word-font);
+  letter-spacing: var(--word-spacing);
+  font-size: clamp(17px, calc(var(--word-size) * 0.42), 26px);
+  line-height: 1.85;
+  cursor: default;
+  scrollbar-width: thin;
+  animation: focus-in .15s ease-out;
+}
+@keyframes focus-in { from { opacity: 0; transform: translateY(8px); } }
+.focus-view[hidden] { display: none; }
+.focus-view h3 {
+  font-size: 1.24em;
+  font-weight: 700;
+  margin: 1.6em 0 .5em;
+  line-height: 1.4;
+}
+.focus-view p { margin: 0 0 1.05em; }
+.focus-view p.li { padding-left: 1.2em; position: relative; margin-bottom: .5em; }
+.focus-view p.li::before { content: "·"; position: absolute; left: .35em; color: var(--muted); }
