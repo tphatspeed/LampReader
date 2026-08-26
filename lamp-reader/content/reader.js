@@ -112,6 +112,19 @@
     return `<b class="bionic">${esc(w.slice(0, n))}</b>${esc(w.slice(n))}`;
   }
 
+  // Tách dấu ngoặc/ngoặc kép/dấu câu bám ở đầu-cuối ra khỏi phần "lõi" của
+  // từ — để tính điểm neo (ORP) và độ đậm Bionic đúng vào chữ cái thật thay
+  // vì lệch bởi dấu, và để tô nhạt riêng phần dấu khi hiển thị. Dấu ngoặc dễ
+  // lẫn vào nội dung khi đọc nhanh; tô nhạt giúp mắt bỏ qua chúng dễ hơn.
+  function splitWord(w) {
+    const m = w.match(/^([([{"'“‘«]*)(.*?)([)\]}"'”’»,.;:!?…]*)$/);
+    if (!m || !m[2]) return { lead: "", core: w, trail: "" };
+    return { lead: m[1], core: m[2], trail: m[3] };
+  }
+  function wrapPunct(s) {
+    return s ? `<span class="punct">${esc(s)}</span>` : "";
+  }
+
   const pacing = () => ({
     wpm: state.wpm,
     rhythm: state.rhythm,
@@ -123,8 +136,10 @@
   // ============================ GIAO DIỆN ============================
 
   function markup() {
+    // Xem trước ngay trên nút: mỗi nút tự hiển thị bằng đúng phông nó đại
+    // diện, nên không cần mở panel ra xa mới biết phông đã đổi hay chưa.
     const fontBtns = Object.entries(FONTS)
-      .map(([k, v]) => `<button class="seg" data-font="${k}">${v.label}</button>`).join("");
+      .map(([k, v]) => `<button class="seg" data-font="${k}"${v.stack ? ` style="font-family:${v.stack.replace(/"/g, "&quot;")}"` : ""}>${v.label}</button>`).join("");
     const themeBtns = THEMES.map(
       (t) => `<button class="swatch" data-theme="${t}" title="${THEME_LABEL[t]}" aria-label="${THEME_LABEL[t]}"><i></i></button>`
     ).join("");
@@ -298,6 +313,30 @@
     state.host = host;
     state.root = root;
     wireEvents();
+    checkFonts();
+  }
+
+  // Ba phông nhúng sẵn — nếu người dùng thả sai tên/đường dẫn file vào
+  // fonts/, nút chọn phông tương ứng tự hiện dấu cảnh báo thay vì âm thầm
+  // lùi về phông hệ thống khiến tưởng nhầm là "chưa đủ phông".
+  const EMBEDDED_FONTS = {
+    vietnam: "fonts/Be_Vietnam_Pro/BeVietnamPro-Regular.ttf",
+    serif: "fonts/Literata/Literata-VariableFont_opsz,wght.ttf",
+    notoserif: "fonts/Noto_Serif/NotoSerif-VariableFont_wdth,wght.ttf"
+  };
+  async function checkFonts() {
+    if (typeof FontFace === "undefined") return;
+    await Promise.all(Object.entries(EMBEDDED_FONTS).map(async ([key, path]) => {
+      try {
+        await new FontFace("__lamp_check_" + key, `url("${chrome.runtime.getURL(path)}")`).load();
+      } catch (e) {
+        const btn = $(`[data-font="${key}"]`);
+        if (btn) {
+          btn.classList.add("font-missing");
+          btn.title = "Không nạp được file phông này — xem fonts/README.txt";
+        }
+      }
+    }));
   }
 
   // ============================ SỰ KIỆN ============================
@@ -401,7 +440,45 @@
 
     $("#restSkip").addEventListener("click", endRest);
 
+    ["#sheet", "#outline", "#quiz"].forEach((s) => makeDraggable($(s)));
+
     document.addEventListener("keydown", onKey, true);
+  }
+
+  // Kéo bảng theo thanh tiêu đề — chủ yếu để kéo bảng Cài đặt sang một bên
+  // mà vẫn nhìn thấy chữ đang đọc, xem phông/cỡ chữ đổi ra sao khi chỉnh.
+  // Không lưu vị trí: mỗi lần mở lại panel về đúng chỗ mặc định (xem panel()).
+  function makeDraggable(panel) {
+    const head = panel.querySelector(".sheet-head");
+    let dragging = false, ox = 0, oy = 0;
+    head.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      dragging = true;
+      const r = panel.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      panel.classList.add("dragging");
+      head.setPointerCapture(e.pointerId);
+    });
+    head.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const maxX = Math.max(8, window.innerWidth - panel.offsetWidth - 8);
+      const maxY = Math.max(8, window.innerHeight - panel.offsetHeight - 8);
+      panel.style.left = clampRange(e.clientX - ox, [8, maxX]) + "px";
+      panel.style.top = clampRange(e.clientY - oy, [8, maxY]) + "px";
+      panel.style.bottom = "auto";
+      panel.style.transform = "none";
+    });
+    const stopDrag = () => { dragging = false; panel.classList.remove("dragging"); };
+    head.addEventListener("pointerup", stopDrag);
+    head.addEventListener("pointercancel", stopDrag);
+  }
+
+  function resetPanelPos(panel) {
+    panel.style.left = "";
+    panel.style.top = "";
+    panel.style.bottom = "";
+    panel.style.transform = "";
   }
 
   function onKey(e) {
@@ -435,7 +512,7 @@
     const show = force === undefined ? el.hidden : force;
     ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
     el.hidden = !show;
-    if (show) { pause(); if (sel === "#sheet") renderStats(); }
+    if (show) { resetPanelPos(el); pause(); if (sel === "#sheet") renderStats(); }
   }
 
   function bump(key, dir) {
@@ -475,7 +552,11 @@
       .map((b, bi) => {
         const words = b.text.split(/\s+/).filter(Boolean);
         const inner = words
-          .map((w, wi) => `<span class="guide-word" data-b="${bi}" data-w="${wi}">${esc(w)}</span>`)
+          .map((w, wi) => {
+            const { lead, core, trail } = splitWord(w);
+            const body = wrapPunct(lead) + esc(core) + wrapPunct(trail);
+            return `<span class="guide-word" data-b="${bi}" data-w="${wi}">${body}</span>`;
+          })
           .join(" ");
         const tag = b.type === "h" ? "h3" : "p";
         const cls = b.type === "li" ? ' class="li"' : "";
@@ -567,17 +648,18 @@
     if (state.mode === "rsvp") {
       const parts = text.split(" ");
       const first = parts[0] || "";
-      let html;
+      const { lead, core, trail } = splitWord(first);
+      let coreHTML;
       if (state.bionic) {
-        html = bionicHTML(first) +
-          (parts.length > 1 ? " " + esc(parts.slice(1).join(" ")) : "");
+        coreHTML = bionicHTML(core);
       } else if (state.orp) {
-        const pi = pivotIndex(first);
-        html = esc(first.slice(0, pi)) +
-          `<span class="pivot">${esc(first.slice(pi, pi + 1))}</span>` +
-          esc(first.slice(pi + 1)) +
-          (parts.length > 1 ? " " + esc(parts.slice(1).join(" ")) : "");
-      } else html = esc(text);
+        const pi = pivotIndex(core);
+        coreHTML = esc(core.slice(0, pi)) +
+          `<span class="pivot">${esc(core.slice(pi, pi + 1))}</span>` +
+          esc(core.slice(pi + 1));
+      } else coreHTML = esc(core);
+      const html = wrapPunct(lead) + coreHTML + wrapPunct(trail) +
+        (parts.length > 1 ? " " + esc(parts.slice(1).join(" ")) : "");
       $("#word").innerHTML = html || "—";
 
       if (state.context) {
@@ -792,8 +874,21 @@
 
   // ============================ KIỂM TRA HIỂU ============================
 
+  // Đọc càng nhiều thì hỏi càng nhiều, trong khoảng 3–8 câu — bài ngắn 5 câu
+  // cố định vừa thừa vừa dễ trùng ý, bài dài 5 câu lại quá ít để đại diện.
+  function quizCount() {
+    const wordsRead = (state.idx + 1) * state.chunkSize;
+    return Math.max(3, Math.min(8, Math.round(wordsRead / 120)));
+  }
+
+  function highlightAnswer(sentence, answer) {
+    const s = esc(sentence), a = esc(answer);
+    const i = s.indexOf(a);
+    return i < 0 ? s : s.slice(0, i) + "<mark>" + a + "</mark>" + s.slice(i + a.length);
+  }
+
   function openQuiz() {
-    const qs = E.buildQuiz(state.tokens, state.idx, 5, state.vietnamese);
+    const qs = E.buildQuiz(state.tokens, state.idx, quizCount(), state.vietnamese);
     const body = $("#quizBody");
     if (!qs.length) {
       body.innerHTML = '<div class="empty">Chưa đọc đủ nội dung để tạo câu hỏi. Đọc thêm rồi thử lại.</div>';
@@ -810,6 +905,7 @@
           <div class="quiz-opts">
             ${q.options.map((o) => `<button class="quiz-opt" data-q="${q.id}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}
           </div>
+          <div class="quiz-context" data-q="${q.id}" hidden></div>
         </div>`).join("")}
       <button class="primary" id="quizSubmit">Chấm điểm</button>
       <div class="quiz-result" id="quizResult" hidden></div>`;
@@ -831,12 +927,25 @@
     let score = 0;
     questions.forEach((q) => {
       const picked = answers[q.id];
-      if (picked === q.answer) score++;
+      const correct = picked === q.answer;
+      if (correct) score++;
       $$(`.quiz-opt[data-q="${q.id}"]`).forEach((b) => {
         if (b.dataset.v === q.answer) b.classList.add("right");
         else if (b.dataset.v === picked) b.classList.add("wrong");
         b.disabled = true;
       });
+      // Sai thì cho xem lại đúng câu gốc kèm đường dẫn nhảy về đó, thay vì
+      // chỉ báo điểm — vậy mới thật sự giúp hiểu bài, không chỉ chấm điểm.
+      if (!correct) {
+        const ctx = $(`.quiz-context[data-q="${q.id}"]`);
+        ctx.hidden = false;
+        ctx.innerHTML = `<p>“${highlightAnswer(q.sentence, q.answer)}”</p>
+          <button class="quiz-review" data-token="${q.token}">↺ Xem lại đoạn này</button>`;
+        ctx.querySelector(".quiz-review").addEventListener("click", () => {
+          jumpTo(parseInt(q.token, 10));
+          panel("#quiz", false);
+        });
+      }
     });
 
     const pct = Math.round((score / questions.length) * 100);

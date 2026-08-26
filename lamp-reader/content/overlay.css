@@ -22,15 +22,22 @@
 }
 
 /* ---------- Bảng màu ----------
-   Tỉ lệ tương phản đã đo theo WCAG:
+   Tỉ lệ tương phản đã đo theo WCAG (script kiểm tra, không đoán bằng mắt):
    chữ/nền >= 7:1 (AAA), chữ phụ/nền >= 4.5:1, màu nhấn/nền >= 4.5:1.
    Tránh đen tuyền và trắng tuyền: nền đen + chữ trắng gây hiện tượng
-   halation (chữ loè nhoè), nhất là với người loạn thị.                */
+   halation (chữ loè nhoè), nhất là với người loạn thị.
 
-/* Giấy — nền trắng ngà ấm, chữ xám đậm. Mặc định ban ngày. 11.8:1 */
+   Nghiên cứu về mỏi mắt khi đọc lâu (không chỉ mức tối thiểu của WCAG) cho
+   thấy ~8:1 là vùng "ngọt" cho hiệu năng thị giác — cao hơn nữa (như 18:1
+   của Tương phản cao) không sai nhưng dễ gây quá kích thích nếu dùng cho
+   đọc dài, nên chỉ giữ mức đó cho theme dành riêng cho thị lực kém. Giấy
+   trước đây 11.8:1, đã hạ chữ nhạt hơn một chút xuống ~9:1 để gần vùng này
+   hơn mà vẫn tách biệt rõ với Sepia.                                     */
+
+/* Giấy — nền trắng ngà ấm, chữ xám đậm. Mặc định ban ngày. 9.1:1 */
 .backdrop[data-theme="paper"] {
   --bg: #FBF9F4; --surface: #FFFFFF; --raise: #F0ECE3; --dock: rgba(251,249,244,.96);
-  --line: #DFD9CC; --text: #38342C; --muted: #6E6A61; --accent: #C2410C; --on-accent: #FFFFFF;
+  --line: #DFD9CC; --text: #4A453A; --muted: #6E6A61; --accent: #C2410C; --on-accent: #FFFFFF;
   background: #FBF9F4;
 }
 
@@ -146,12 +153,20 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   padding: 0 10px;
   max-width: 100%;
 }
+/* Tô màu chữ + gạch chân — thử đổi sang nền tô đầy ở bản trước vì đo được
+   màu chữ ORP so với chữ thường chỉ ~1.3–2.9:1, nhưng phản hồi thực tế là
+   nền tô đầy nhìn rối mắt hơn. Quay lại cách cũ; gạch chân vẫn giữ làm tín
+   hiệu không phụ thuộc màu, không cần thêm nền. */
 .word .pivot {
   color: var(--accent);
   border-bottom: 0.06em solid var(--accent);
   padding-bottom: 0.02em;
 }
 .backdrop[data-orp="off"] .word .pivot { color: inherit; border-bottom: none; }
+
+/* Dấu ngoặc/ngoặc kép/dấu câu bám đầu-cuối từ — tô nhạt để mắt lướt qua
+   nhanh, không lẫn vào nội dung chính khi đọc từng cụm hoặc cả đoạn. */
+.word .punct, .guide-word .punct { opacity: .45; }
 
 .context {
   max-width: 720px;
@@ -383,14 +398,39 @@ kbd {
 .sheet[hidden] { display: none; }
 @keyframes rise { from { transform: translate(-50%, 14px); opacity: 0; } }
 
+/* Kéo bảng theo thanh tiêu đề — nhả tay là bảng tự bo tròn 4 góc và bung
+   bóng đổ như một cửa sổ nổi, không còn dính đáy màn hình nữa. */
+.sheet.dragging {
+  animation: none;
+  border-radius: 20px;
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 12px 34px rgba(0,0,0,.3);
+}
+
 .sheet-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px;
+  padding: 20px 18px 16px;
   border-bottom: 1px solid var(--line);
   font-size: 16px;
+  cursor: grab;
+  touch-action: none;
+  position: relative;
 }
+.sheet-head::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.sheet.dragging .sheet-head { cursor: grabbing; }
+.sheet.dragging .sheet-head, .sheet.dragging .sheet-body { user-select: none; }
 .sheet-body {
   overflow-y: auto;
   padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
@@ -432,6 +472,9 @@ kbd {
 }
 .seg:hover { color: var(--text); }
 .seg.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+/* File phông không nạp được (thiếu file, sai tên) — tự phát hiện qua
+   FontFace().load(), xem checkFonts() trong reader.js. */
+.seg.font-missing::after { content: " ⚠"; opacity: .8; }
 
 .swatches { display: flex; gap: 10px; flex-wrap: wrap; }
 .swatch {
@@ -651,6 +694,37 @@ kbd {
 .quiz-opt.right { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .quiz-opt.wrong { opacity: .5; text-decoration: line-through; }
 .quiz-opt:disabled { cursor: default; }
+
+/* Câu gốc + nút xem lại — chỉ hiện khi trả lời sai, ngay dưới câu đó */
+.quiz-context {
+  margin-top: 11px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--raise);
+}
+.quiz-context p {
+  margin: 0 0 9px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--muted);
+}
+.quiz-context mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+.quiz-review {
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.quiz-review:hover { border-color: var(--accent); color: var(--accent); }
 
 .primary {
   margin-top: 16px;

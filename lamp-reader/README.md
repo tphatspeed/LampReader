@@ -71,8 +71,12 @@ Với tiếng Việt, ứng dụng khoét cả cụm hai âm tiết thay vì m�
 
 ### Bảng cài đặt (nút ⚙)
 
-- **Phông chữ** — Hệ thống, Be Vietnam, Tahoma, Serif (Literata), Noto Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy
-- **Giao diện** — Giấy, Sepia, Xám, Đêm, Tương phản cao (đo theo WCAG: chữ/nền ≥ 7:1)
+Kéo được bằng thanh tiêu đề (có vạch xám nhỏ ở giữa để nhận ra) — kéo sang một
+bên hoặc lên trên để vẫn nhìn thấy chữ đang đọc trong lúc chỉnh phông/cỡ chữ.
+Đóng rồi mở lại là bảng về đúng vị trí mặc định.
+
+- **Phông chữ** — Hệ thống, Be Vietnam, Tahoma, Serif (Literata), Noto Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy. Mỗi nút tự hiển thị bằng đúng phông nó đại diện; nút nào có dấu ⚠ nghĩa là file phông trong `fonts/` không nạp được (xem `fonts/README.txt`)
+- **Giao diện** — Giấy, Sepia, Xám, Đêm, Tương phản cao (đo theo WCAG: chữ/nền ≥ 7:1, xem thêm ghi chú tương phản trong `content/overlay.css`)
 - **Giãn chữ** — nới khoảng cách giữa các ký tự, 0–12px
 - **Giọng đọc** — bật text-to-speech, chữ chạy theo giọng qua sự kiện `onboundary`; chọn được giọng, tự ưu tiên giọng cùng ngôn ngữ với bài
 - **Tô chữ trung tâm (ORP)** — điểm neo mắt, có thêm gạch chân nên không phụ thuộc riêng vào màu
@@ -84,6 +88,15 @@ Với tiếng Việt, ứng dụng khoét cả cụm hai âm tiết thay vì m�
 - **Khởi động chậm** — 40 cụm đầu chạy ở 65% tốc độ rồi tăng dần
 - **Nhắc nghỉ mắt** — cứ 20 phút đọc thì dừng, đếm ngược 20 giây (quy tắc 20-20-20)
 - **Thống kê** — số từ và thời gian đọc 7 ngày qua, WPM thực tế, và điểm kiểm tra theo từng mức tốc độ
+
+### Ngoặc, ngoặc kép, dấu câu
+
+Dấu `()`, `""`, `“”` bám ở đầu/cuối một từ được tách ra và tô nhạt hơn (ở mọi
+chế độ) để mắt lướt qua nhanh, không lẫn vào nội dung chính — và không làm
+lệch điểm neo ORP/độ đậm Bionic vào đúng dấu thay vì chữ cái. Ở RSVP, từ mở
+hoặc đóng một đoạn trong ngoặc/trích dẫn được giữ lại lâu hơn một nhịp, để
+kịp nhận ra đây là phần chú thích chứ không phải mạch câu chính. Không áp
+dụng cho dấu nháy đơn giữa từ (như "don't") để khỏi làm chậm nhầm từ viết tắt.
 
 ### Tiếng Việt
 
@@ -146,6 +159,9 @@ lamp-reader/
 | Vị trí chấm ORP / độ dài bôi đậm Bionic | `content/reader.js`, hàm `pivotIndex` / `bionicSplit` |
 | Nội dung focus view khi RSVP dừng | `content/reader.js`, hàm `updateFocusOverlay`, `paintBlocksInto` |
 | Phông chữ nhúng sẵn (Be Vietnam, Serif, Noto Serif) | `content/overlay.css`, các khối `@font-face`; xem `fonts/README.txt` |
+| Kiểm tra phông có nạp được không | `content/reader.js`, hàm `checkFonts` |
+| Tách/tô nhạt dấu ngoặc, ngoặc kép ở đầu-cuối từ | `content/reader.js`, hàm `splitWord` |
+| Kéo bảng cài đặt/dàn bài/quiz | `content/reader.js`, hàm `makeDraggable`; CSS `.sheet-head`, `.sheet.dragging` |
 | Màu sắc, theme, bố cục responsive | `content/overlay.css` |
 | Cách ghép dòng PDF thành đoạn | `viewer/viewer.js`, hàm `itemsToParagraphs` |
 | Phím tắt mặc định | `manifest.json`, mục `commands` |
