@@ -8,26 +8,7 @@
 
   const E = window.__lampEngine;
 
-  const DEFAULTS = {
-    mode: "rsvp",
-    wpm: 350,
-    chunkSize: 1,
-    fontSize: 56,
-    fontFamily: "system",
-    customFont: "",
-    spacing: 0,
-    theme: "sepia",
-    orp: true,
-    ruler: true,
-    rhythm: true,
-    context: false,
-    warmup: false,
-    tts: false,
-    voiceURI: "",
-    restReminder: true,
-    bionic: false,
-    shortWords: false
-  };
+  const DEFAULTS = window.LAMP_DEFAULTS; // xem content/defaults.js
 
   const STEP = { wpm: 50, chunk: 1, size: 4, spacing: 1 };
   const LIMIT = { wpm: [100, 1200], chunk: [1, 6], size: [24, 120], spacing: [0, 12] };
@@ -67,6 +48,7 @@
     // thống kê phiên
     sessionStart: 0,
     activeMs: 0,
+    creditedIdx: 0, // token đã tính vào thống kê, để không cộng trùng
     lastTick: 0,
     sinceRest: 0,
     restTimer: null,
@@ -81,7 +63,11 @@
   const $$ = (s) => Array.from(state.root.querySelectorAll(s));
   const clampRange = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
   const clamp = (i) => Math.min(Math.max(0, i), Math.max(0, state.tokens.length - 1));
-  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Escape cả dấu nháy: chuỗi này còn được nhét vào thuộc tính HTML
+  // (data-v="…", value="…"), thiếu &quot; là vỡ thuộc tính.
+  const esc = (s) => String(s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
   function fmtTime(sec) {
     sec = Math.max(0, Math.round(sec));
@@ -132,6 +118,11 @@
     vietnamese: state.vietnamese,
     shortWords: state.shortWords
   });
+
+  // Tốc độ thật sau khi trừ phần giảm nhịp cho tiếng Việt — dùng cho ước
+  // lượng thời gian còn lại và cho tốc độ giọng đọc, để hai thứ này khớp với
+  // nhịp chữ đang chạy thay vì lệch 15%.
+  const effectiveWpm = () => state.wpm * (state.vietnamese ? 0.85 : 1);
 
   // ============================ GIAO DIỆN ============================
 
@@ -376,6 +367,7 @@
     let dragging = false;
     const seekTo = (x) => {
       const r = track.getBoundingClientRect();
+      if (!r.width) return;
       const pct = Math.min(1, Math.max(0, (x - r.left) / r.width));
       state.idx = clamp(Math.round(pct * (state.tokens.length - 1)));
       render();
@@ -385,7 +377,18 @@
       dragging = true; track.setPointerCapture(e.pointerId); pause(); seekTo(e.clientX);
     });
     track.addEventListener("pointermove", (e) => dragging && seekTo(e.clientX));
-    track.addEventListener("pointerup", () => (dragging = false));
+    // pointercancel cũng phải nhả: thiếu nó thì một cú vuốt bị hệ điều hành
+    // cắt ngang sẽ để dragging kẹt ở true, di chuột là tua lung tung.
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((ev) =>
+      track.addEventListener(ev, () => (dragging = false))
+    );
+    // role="slider" mà không lái được bằng bàn phím thì chỉ là nhãn suông
+    track.addEventListener("keydown", (e) => {
+      const step = { ArrowLeft: -1, ArrowRight: 1, PageUp: -25, PageDown: 25 }[e.key];
+      if (step !== undefined) { e.preventDefault(); e.stopPropagation(); skip(step); }
+      else if (e.key === "Home") { e.preventDefault(); e.stopPropagation(); jumpTo(0); }
+      else if (e.key === "End") { e.preventDefault(); e.stopPropagation(); jumpTo(state.tokens.length - 1); }
+    });
 
     $("#fonts").addEventListener("click", (e) => {
       const b = e.target.closest("[data-font]");
@@ -485,7 +488,19 @@
     if (!state.open) return;
     const k = e.key;
     const stop = () => { e.preventDefault(); e.stopPropagation(); };
-    if (e.target && e.target.tagName === "INPUT") return;
+
+    // Listener nằm ở document nên e.target bị "retarget" về phần tử host của
+    // Shadow DOM (luôn là DIV) — kiểm tra e.target.tagName sẽ không bao giờ
+    // thấy INPUT, khiến gõ chữ vào ô "Tuỳ chỉnh phông" lại kích hoạt phím tắt
+    // (gõ "s" mở cài đặt, dấu cách chạy/dừng…). Phải lấy phần tử thật qua
+    // composedPath()[0].
+    const real = (e.composedPath && e.composedPath()[0]) || e.target;
+    const tag = real && real.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" ||
+        (real && real.isContentEditable)) return;
+
+    // Để nguyên tổ hợp có Ctrl/Cmd/Alt cho trình duyệt và trang web
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (k === "Escape") {
       stop();
@@ -512,17 +527,30 @@
     const show = force === undefined ? el.hidden : force;
     ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
     el.hidden = !show;
-    if (show) { resetPanelPos(el); pause(); if (sel === "#sheet") renderStats(); }
+    if (show) {
+      resetPanelPos(el);
+      pause();
+      if (sel === "#sheet") renderStats();
+      if (sel === "#outline") markOutlineCurrent();
+    }
   }
 
   function bump(key, dir) {
     if (key === "wpm") state.wpm = clampRange(state.wpm + dir * STEP.wpm, LIMIT.wpm);
     else if (key === "chunk") {
-      const ratio = state.tokens.length ? state.idx / state.tokens.length : 0;
+      // Giữ đúng vị trí đang đọc theo (khối, từ) thay vì theo tỉ lệ phần trăm
+      // — đổi số từ mỗi lần không được làm nhảy chỗ đang đọc.
+      const at = state.tokens[state.idx];
       state.chunkSize = clampRange(state.chunkSize + dir * STEP.chunk, LIMIT.chunk);
       state.tokens = E.buildTokens(state.blocks, state.chunkSize);
-      state.idx = clamp(Math.round(ratio * state.tokens.length));
-      if (state.mode === "guide") paintGuide();
+      const found = at
+        ? state.tokens.findIndex((t) => t.block === at.block && at.from >= t.from && at.from <= t.to)
+        : -1;
+      state.idx = clamp(found >= 0 ? found : 0);
+      state.creditedIdx = Math.min(state.creditedIdx, state.idx);
+      // Dàn bài trỏ tới chỉ số token — đổi chunkSize là toàn bộ chỉ số lệch,
+      // không dựng lại thì bấm mục nào cũng nhảy sai chỗ.
+      renderOutline();
     } else if (key === "size") {
       state.fontSize = clampRange(state.fontSize + dir * STEP.size, LIMIT.size);
     } else if (key === "spacing") {
@@ -564,23 +592,52 @@
       })
       .join("");
     container.innerHTML = html;
+
+    // Dựng sẵn mảng phẳng + mốc đầu mỗi khối để tô sáng theo chỉ số, khỏi
+    // phải quét lại toàn bộ DOM mỗi khung hình (xem highlightInto).
+    const words = Array.from(container.querySelectorAll(".guide-word"));
+    const offsets = new Map();
+    words.forEach((el, i) => {
+      const b = +el.dataset.b;
+      if (!offsets.has(b)) offsets.set(b, i);
+    });
+    container.__lamp = { words, offsets, on: null, past: 0, painted: true };
   }
 
+  function clearPaintCache() {
+    ["#guideView", "#focusView"].forEach((s) => {
+      const el = $(s);
+      if (el) { el.innerHTML = ""; el.__lamp = null; }
+    });
+  }
+
+  // Tô sáng theo phần CHÊNH LỆCH so với lần trước. Bản cũ gọi
+  // querySelectorAll(".guide-word") rồi duyệt toàn bộ ở mỗi lần render —
+  // với bài vài nghìn từ thì mỗi lần kéo thanh tiến độ là một vòng lặp qua
+  // hàng nghìn phần tử, giật thấy rõ. Giờ chỉ đụng tới các từ thật sự đổi.
   function highlightInto(container) {
     const t = state.tokens[state.idx];
-    if (!t) return;
-    container.querySelectorAll(".guide-word.on").forEach((el) => el.classList.remove("on"));
-    container.querySelectorAll(".guide-word.past").forEach((el) => el.classList.remove("past"));
+    const c = container.__lamp;
+    if (!t || !c) return;
+    const base = c.offsets.get(t.block);
+    if (base === undefined) return;
 
-    let first = null;
-    container.querySelectorAll(".guide-word").forEach((el) => {
-      const b = +el.dataset.b, w = +el.dataset.w;
-      if (b < t.block || (b === t.block && w < t.from)) el.classList.add("past");
-      else if (b === t.block && w >= t.from && w <= t.to) {
-        el.classList.add("on");
-        if (!first) first = el;
-      }
-    });
+    const from = Math.min(base + t.from, c.words.length - 1);
+    const to = Math.min(base + t.to, c.words.length - 1);
+
+    if (c.on) {
+      for (let i = c.on.from; i <= c.on.to; i++) c.words[i].classList.remove("on");
+    }
+    if (from > c.past) {
+      for (let i = c.past; i < from; i++) c.words[i].classList.add("past");
+    } else if (from < c.past) {
+      for (let i = from; i < c.past; i++) c.words[i].classList.remove("past");
+    }
+    c.past = from;
+    for (let i = from; i <= to; i++) c.words[i].classList.add("on");
+    c.on = { from, to };
+
+    const first = c.words[from];
     if (first) {
       const r = first.getBoundingClientRect();
       const vr = container.getBoundingClientRect();
@@ -590,17 +647,20 @@
     }
   }
 
-  function paintGuide() { paintBlocksInto($("#guideView")); }
+  function paintGuide() {
+    const el = $("#guideView");
+    if (!el.__lamp) paintBlocksInto(el);
+  }
   function highlightGuide() { highlightInto($("#guideView")); }
 
   // RSVP dừng lại → hiện toàn văn bản kèm vị trí đang đọc, để nắm lại mạch
-  // bài trước khi đọc tiếp. Chỉ vẽ lại HTML lúc mới hiện ra (đỡ tốn khi kéo
-  // thanh tiến độ liên tục), các lần sau chỉ cập nhật phần tô sáng.
+  // bài trước khi đọc tiếp. Chỉ dựng HTML đúng một lần cho mỗi tài liệu —
+  // dựng lại ở mỗi lần dừng thì bài dài sẽ khựng mỗi khi bấm Space.
   function updateFocusOverlay() {
     const fv = $("#focusView");
     const show = state.mode === "rsvp" && state.started && !state.playing;
     if (show) {
-      if (fv.hidden) paintBlocksInto(fv);
+      if (!fv.__lamp) paintBlocksInto(fv);
       fv.hidden = false;
       highlightInto(fv);
     } else {
@@ -672,13 +732,21 @@
     }
 
     const total = state.tokens.length;
-    $("#pos").textContent = `${state.idx + 1} / ${total}`;
+    $("#pos").textContent = total ? `${state.idx + 1} / ${total}` : "0 / 0";
     const pct = total ? ((state.idx + 1) / total) * 100 : 0;
     $("#fill").style.width = pct + "%";
     $("#knob").style.left = pct + "%";
 
+    const track = $("#track");
+    track.setAttribute("aria-valuemin", "1");
+    track.setAttribute("aria-valuemax", String(Math.max(1, total)));
+    track.setAttribute("aria-valuenow", String(state.idx + 1));
+    track.setAttribute("aria-valuetext", `${Math.round(pct)}% — ${state.idx + 1} trên ${total}`);
+
+    // Nhịp thực tế đã tính cả giảm tốc tiếng Việt, nên thời gian còn lại mới
+    // khớp với cảm nhận; lấy thẳng wpm sẽ luôn báo ngắn hơn thực tế ~15%.
     const wordsLeft = (total - state.idx) * state.chunkSize;
-    $("#left").textContent = "còn " + fmtTime(wordsLeft / (state.wpm / 60));
+    $("#left").textContent = "còn " + fmtTime(wordsLeft / (effectiveWpm() / 60));
 
     // Vùng tốc độ: nghiên cứu RSVP cho thấy tới ~350 WPM khả năng hiểu ngang
     // đọc thường, vượt lên thì tụt rõ rệt.
@@ -689,6 +757,8 @@
 
     $("#ready").hidden = state.started;
     updateFocusOverlay();
+    // Chỉ cập nhật khi dàn bài đang mở — không thì mỗi nhịp chữ lại quét DOM
+    if (!$("#outline").hidden) markOutlineCurrent();
   }
 
   // ============================ VÒNG CHẠY ============================
@@ -801,7 +871,7 @@
     const v = speechSynthesis.getVoices().find((x) => x.voiceURI === state.voiceURI);
     if (v) u.voice = v;
     // Giọng chuẩn khoảng 180 WPM ở rate 1
-    u.rate = Math.min(3, Math.max(0.5, state.wpm / 180));
+    u.rate = Math.min(3, Math.max(0.5, effectiveWpm() / 180));
     const base = state.idx;
     let gotBoundary = false;
 
@@ -864,12 +934,24 @@
       list.innerHTML = '<div class="empty">Trang này không có tiêu đề mục nào để dựng dàn bài.</div>';
       return;
     }
+    const total = Math.max(1, state.tokens.length);
     list.innerHTML = items
-      .map((it) => `<button class="outline-item" data-token="${it.token}">
+      .map((it) => `<button class="outline-item" data-token="${it.token}" data-depth="${it.depth || 0}">
           <span class="outline-text">${esc(it.text)}</span>
-          <span class="outline-pos">${Math.round((it.token / state.tokens.length) * 100)}%</span>
+          <span class="outline-pos">${Math.round((it.token / total) * 100)}%</span>
         </button>`)
       .join("");
+    markOutlineCurrent();
+  }
+
+  // Đánh dấu mục đang đọc để mở dàn bài ra là biết ngay mình đang ở đâu
+  function markOutlineCurrent() {
+    const btns = $$(".outline-item");
+    let cur = -1;
+    btns.forEach((b, i) => {
+      if (+b.dataset.token <= state.idx) cur = i;
+    });
+    btns.forEach((b, i) => b.classList.toggle("current", i === cur));
   }
 
   // ============================ KIỂM TRA HIỂU ============================
@@ -910,19 +992,35 @@
       <button class="primary" id="quizSubmit">Chấm điểm</button>
       <div class="quiz-result" id="quizResult" hidden></div>`;
 
+    const submit = body.querySelector("#quizSubmit");
+    // Chấm khi chưa chọn hết thì mọi câu bỏ trống đều tính sai, và điểm 0 đó
+    // lại được ghi vào thống kê "điểm theo tốc độ" — làm hỏng chính dữ liệu
+    // dùng để tìm ngưỡng WPM của bạn. Khoá nút cho tới khi trả lời đủ.
+    const refreshSubmit = () => {
+      const done = Object.keys(state.quiz.answers).length;
+      submit.disabled = done < qs.length;
+      submit.textContent = done < qs.length
+        ? `Chấm điểm — còn ${qs.length - done} câu`
+        : "Chấm điểm";
+    };
+
     body.querySelectorAll(".quiz-opt").forEach((b) =>
       b.addEventListener("click", () => {
         state.quiz.answers[b.dataset.q] = b.dataset.v;
         body.querySelectorAll(`.quiz-opt[data-q="${b.dataset.q}"]`)
           .forEach((x) => x.classList.remove("picked"));
         b.classList.add("picked");
+        refreshSubmit();
       })
     );
-    body.querySelector("#quizSubmit").addEventListener("click", gradeQuiz);
+    submit.addEventListener("click", gradeQuiz);
+    refreshSubmit();
     panel("#quiz", true);
   }
 
   function gradeQuiz() {
+    if (!state.quiz || state.quiz.graded) return;
+    state.quiz.graded = true;
     const { questions, answers } = state.quiz;
     let score = 0;
     questions.forEach((q) => {
@@ -964,16 +1062,28 @@
 
   // ============================ THỐNG KÊ ============================
 
+  // Chỉ cộng phần MỚI đọc kể từ lần ghi trước. Trước đây hàm này cộng
+  // (idx+1)*chunkSize — tức toàn bộ vị trí tuyệt đối — nên đọc hết bài rồi
+  // đóng lại bị cộng hai lần (finish() và close() đều gọi), và chỉ mở ra rồi
+  // đóng ngay ở vị trí đã lưu cũng bị cộng khống cả nghìn từ.
   async function recordSession() {
     accrue();
-    const words = (state.idx + 1) * state.chunkSize;
+    const newTokens = Math.max(0, state.idx - state.creditedIdx);
+    const words = newTokens * state.chunkSize;
+    const ms = state.activeMs;
+    state.creditedIdx = state.idx;
+    state.activeMs = 0;
+    if (!words && !ms) return;
+
     const day = new Date().toISOString().slice(0, 10);
     const { stats = { days: {}, quizzes: [] } } = await chrome.storage.local.get("stats");
     const d = stats.days[day] || { words: 0, ms: 0 };
     d.words += words;
-    d.ms += state.activeMs;
+    d.ms += ms;
     stats.days[day] = d;
-    state.activeMs = 0;
+    // Giữ 90 ngày gần nhất, tránh phình storage vô hạn
+    const keep = Object.keys(stats.days).sort().slice(-90);
+    stats.days = Object.fromEntries(keep.map((k) => [k, stats.days[k]]));
     await chrome.storage.local.set({ stats });
   }
 
@@ -1025,21 +1135,40 @@
     chrome.storage.sync.set(out);
   }
 
+  // Lưu vị trí theo (khối, từ) chứ không theo chỉ số token: token phụ thuộc
+  // "số từ mỗi lần", nên bản cũ lưu theo token thì chỉ cần đổi chunkSize là
+  // mất sạch tiến trình. Toạ độ (khối, từ) không đổi theo chunkSize.
   function saveProgress() {
     if (!state.docKey) return;
+    const t = state.tokens[state.idx];
+    if (!t) return;
     chrome.storage.local.set({
-      ["pos:" + state.docKey]: { idx: state.idx, total: state.tokens.length, at: Date.now() }
+      ["pos:" + state.docKey]: {
+        block: t.block, word: t.from, blocks: state.blocks.length, at: Date.now()
+      }
     });
   }
 
   async function loadProgress() {
     if (!state.docKey) return 0;
     const key = "pos:" + state.docKey;
-    const data = await chrome.storage.local.get(key);
-    const rec = data[key];
-    if (!rec || rec.total !== state.tokens.length) return 0;
-    if (rec.idx < 5 || rec.idx >= state.tokens.length - 2) return 0;
-    return rec.idx;
+    let rec;
+    try {
+      rec = (await chrome.storage.local.get(key))[key];
+    } catch (e) { return 0; }
+    if (!rec) return 0;
+    // Bản ghi cũ (lưu theo token) — bỏ qua, đọc lại từ đầu một lần
+    if (rec.block === undefined) return 0;
+    // Nội dung trang đã đổi hẳn thì vị trí cũ không còn nghĩa
+    if (rec.blocks !== state.blocks.length) return 0;
+
+    const i = state.tokens.findIndex(
+      (t) => t.block === rec.block && rec.word >= t.from && rec.word <= t.to
+    );
+    if (i < 0) return 0;
+    // Gần đầu hoặc gần cuối thì đọc lại từ đầu cho gọn
+    if (i < 5 || i >= state.tokens.length - 2) return 0;
+    return i;
   }
 
   // ============================ VÒNG ĐỜI ============================
@@ -1062,10 +1191,14 @@
     state.blocks = blocks;
     state.vietnamese = E.detectVietnamese(joined);
     state.tokens = E.buildTokens(blocks, state.chunkSize);
-    state.docKey = (location.href.split("#")[0] || "").slice(0, 300);
+    // Trang xem PDF luôn có cùng URL nên mọi file PDF mở từ máy sẽ dùng chung
+    // một khoá tiến trình — thêm tên tài liệu vào khoá để tách chúng ra.
+    state.docKey = ((location.href.split("#")[0] || "") +
+      (ex.source === "pdf" ? "#" + (ex.title || "") : "")).slice(0, 300);
     state.playing = false;
     state.started = false;
     state.activeMs = 0;
+    state.lastTick = 0;
     state.sinceRest = 0;
     state.sessionStart = Date.now();
 
@@ -1075,8 +1208,11 @@
     ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
     $("#rest").hidden = true;
     $("#focusView").hidden = true;
+    // Tài liệu mới → bỏ HTML đã dựng của tài liệu cũ
+    clearPaintCache();
 
     state.idx = await loadProgress();
+    state.creditedIdx = state.idx; // chỉ tính phần đọc thêm từ đây trở đi
     if (state.idx > 0) state.started = true;
 
     $("#docTitle").textContent = ex.source === "selection"

@@ -4,6 +4,26 @@
 từng từ hiện lần lượt tại một vị trí cố định, mắt không phải di chuyển, giảm việc
 đọc thầm trong đầu.
 
+## So với SwiftRead
+
+Lamp bám theo bộ tính năng cốt lõi của SwiftRead (RSVP, dẫn dòng, giọng đọc,
+PDF, chuột phải đọc đoạn bôi đen, tuỳ chỉnh phông/giao diện) và thêm những thứ
+SwiftRead hoặc không có, hoặc tính tiền:
+
+| | Lamp | SwiftRead |
+|---|---|---|
+| Giá | Miễn phí, không tài khoản | Bản trả phí ~$4/tháng cho tính năng đầy đủ |
+| Giới hạn dùng | Không | Bản miễn phí có hạn mức theo ngày cho TTS/PDF/ePub |
+| Dữ liệu | Chạy hoàn toàn tại máy, không gửi gì lên mạng | Dịch vụ đám mây |
+| Kiểm tra hiểu | Tự sinh câu hỏi từ chính bài vừa đọc, chấm xong gợi ý tốc độ | Thư viện bài tập nằm sau bản trả phí |
+| Thống kê | Điểm kiểm tra theo từng mức WPM — tìm ngưỡng của riêng bạn | Theo dõi tốc độ, không đối chiếu mức độ hiểu |
+| Tiếng Việt | Tự nhận diện, giảm nhịp 15%, quiz khoét cả cụm 2 âm tiết, phông xử lý dấu chồng | Xử lý như mọi ngôn ngữ Latin khác |
+| Dàn bài | Có, thụt lề theo cấp tiêu đề, đánh dấu mục đang đọc | Không |
+| Xem toàn văn khi dừng | Có — dừng là hiện cả bài kèm vị trí đang đọc | Không |
+
+Chỗ SwiftRead vẫn hơn: đọc ePub/Kindle/Libby, giọng đọc AI chất lượng cao (Lamp
+dùng giọng có sẵn của hệ điều hành), và có ứng dụng di động riêng.
+
 ## Cài đặt (Load unpacked)
 
 1. Giải nén thư mục `lamp-reader/` ra một chỗ cố định trên máy (đừng xoá sau khi cài).
@@ -57,8 +77,12 @@ quay lại hiện từng từ như bình thường.
 
 ### Dàn bài (nút danh sách, phím `O`)
 
-Liệt kê toàn bộ tiêu đề mục của trang kèm vị trí phần trăm. Bấm vào là nhảy thẳng
-tới đó. Bù lại phần cấu trúc văn bản mà RSVP xoá mất.
+Liệt kê toàn bộ tiêu đề mục của trang kèm vị trí phần trăm, thụt lề theo cấp
+(h1/h2/h3 → 3 mức), và đánh dấu mục bạn đang đọc. Bấm vào là nhảy thẳng tới đó.
+Bù lại phần cấu trúc văn bản mà RSVP xoá mất.
+
+Phím `Home` / `End` / `PageUp` / `PageDown` điều khiển được thanh tiến độ khi nó
+đang được chọn (Tab tới) — dùng được hoàn toàn bằng bàn phím.
 
 ### Kiểm tra hiểu (phím `Q`)
 
@@ -137,9 +161,12 @@ lamp-reader/
 ├── manifest.json          # Khai báo extension (Manifest V3)
 ├── background.js          # Service worker: nhận Alt+R, tiêm script vào tab
 ├── content/
+│   ├── defaults.js        # NGUỒN DUY NHẤT của cài đặt mặc định (dùng chung cả 4 nơi)
 │   ├── extractor.js       # Tách nội dung chính khỏi menu/quảng cáo/sidebar
-│   ├── reader.js          # Engine RSVP + giao diện overlay (Shadow DOM)
-│   └── overlay.css        # 3 theme màu cho overlay
+│   ├── engine.js          # Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
+│   ├── reader.js          # Giao diện overlay RSVP (Shadow DOM)
+│   └── overlay.css        # 5 theme màu + bố cục overlay
+├── fonts/                 # Be Vietnam Pro, Literata, Noto Serif (nhúng sẵn)
 ├── popup/
 │   ├── popup.html         # Bảng cài đặt khi bấm icon
 │   └── popup.js
@@ -148,13 +175,33 @@ lamp-reader/
 │   └── viewer.js          # Trích xuất chữ bằng pdf.js
 ├── vendor/                # pdf.mjs + pdf.worker.mjs (đã nhúng sẵn)
 └── icons/
+
+test/                      # Chỉ dùng khi phát triển, KHÔNG nằm trong extension
+├── harness.html           # 50 phép kiểm thử tích hợp, chạy thật trong trình duyệt
+└── demo.html              # Bài viết mẫu để xem nhanh giao diện
 ```
+
+### Chạy kiểm thử
+
+Thư mục `test/` cần được phục vụ qua HTTP (mở thẳng bằng `file://` sẽ bị chặn
+khi nạp CSS). Từ thư mục gốc của dự án:
+
+```bash
+python3 -m http.server 8899
+```
+
+Rồi mở `http://localhost:8899/test/harness.html` — trang tự chạy và in ra
+số phép kiểm thử đạt/hỏng. `test/demo.html` mở sẵn trình đọc trên một bài mẫu
+để xem nhanh giao diện mà không cần cài extension.
 
 ## Muốn sửa gì thì sửa ở đâu
 
 | Muốn thay đổi | Sửa file |
 |---|---|
+| Thêm/đổi một tuỳ chọn cài đặt | `content/defaults.js` — chỉ sửa ở đây, 4 nơi còn lại tự lấy theo |
 | Thuật toán tách nội dung chính | `content/extractor.js`, hàm `scoreNode` |
+| Loại khối (tiêu đề/đoạn/danh sách) | `content/extractor.js`, hàm `blockType` |
+| Cách tô sáng chạy theo chữ | `content/reader.js`, hàm `highlightInto` |
 | Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
 | Vị trí chấm ORP / độ dài bôi đậm Bionic | `content/reader.js`, hàm `pivotIndex` / `bionicSplit` |
 | Nội dung focus view khi RSVP dừng | `content/reader.js`, hàm `updateFocusOverlay`, `paintBlocksInto` |

@@ -135,13 +135,11 @@ async function startReading(text, title) {
     .map((s) => ({ type: s.length < 70 && !/[.!?]$/.test(s) ? "h" : "p", text: s }));
   window.__lampExtract = () => ({ title, source: "pdf", blocks });
 
-  const settings = await chrome.storage.sync.get({
-    wpm: 350,
-    chunkSize: 1,
-    theme: "night",
-    pausePunctuation: true
-  });
-
+  // Lấy TOÀN BỘ cài đặt đã lưu. Bản cũ chỉ hỏi 4 khoá, trong đó
+  // "pausePunctuation" còn không phải tên thật của tuỳ chọn nào (đúng ra là
+  // "rhythm") — hậu quả là mở PDF thì mất hết phông, giao diện, ORP… mà
+  // người dùng đã chọn, và theme bị ép về "night".
+  const settings = await chrome.storage.sync.get(null);
   window.__lampReader.open(settings);
 
   const words = text.split(/\s+/).filter(Boolean).length;

@@ -107,8 +107,21 @@
     const items = [];
     blocks.forEach((b, bi) => {
       if (b.type !== "h") return;
-      items.push({ text: b.text, block: bi, token: firstToken.get(bi) ?? 0 });
+      items.push({
+        text: b.text,
+        block: bi,
+        level: b.level || 1,
+        token: firstToken.get(bi) ?? 0
+      });
     });
+    if (!items.length) return items;
+
+    // Chuẩn hoá cấp về 0,1,2… theo thứ tự cấp có thật trong bài — trang dùng
+    // h2/h3 và trang dùng h1/h2 phải thụt lề như nhau, không phụ thuộc việc
+    // tác giả bắt đầu từ thẻ nào.
+    const levels = [...new Set(items.map((i) => i.level))].sort((a, b) => a - b);
+    const depthOf = new Map(levels.map((lv, i) => [lv, Math.min(i, 2)]));
+    items.forEach((i) => (i.depth = depthOf.get(i.level) || 0));
     return items;
   }
 

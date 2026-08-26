@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Lamp — xem thử giao diện</title>
+<style>
+  body { font: 16px/1.7 Georgia, serif; margin: 40px auto; max-width: 720px; color:#222; }
+</style>
+</head>
+<body>
+<article>
+  <h1>Trí tuệ nhân tạo và tương lai công việc</h1>
+  <p>Trí tuệ nhân tạo đang thay đổi cách con người làm việc mỗi ngày một cách sâu sắc và rõ rệt. Nhiều công ty công nghệ lớn đã đầu tư hàng tỷ đô la vào nghiên cứu học máy trong năm qua, và kết quả bắt đầu hiện rõ trong nhiều ngành nghề khác nhau.</p>
+  <h2>Triển vọng phát triển</h2>
+  <p>Các nhà khoa học tin rằng công nghệ này (đặc biệt là các mô hình ngôn ngữ lớn) sẽ tiếp tục phát triển nhanh chóng trong thập kỷ tới. Tuy nhiên, một số chuyên gia cảnh báo rằng việc ứng dụng thiếu kiểm soát có thể gây ra rủi ro nghiêm trọng cho xã hội.</p>
+  <p>Theo một báo cáo gần đây, “khoảng cách giữa kỳ vọng và thực tế vẫn còn rất lớn” — điều này đòi hỏi cách tiếp cận thận trọng hơn từ cả doanh nghiệp lẫn cơ quan quản lý nhà nước.</p>
+  <h2>Quản lý và giáo dục</h2>
+  <p>Chính phủ nhiều quốc gia đang soạn thảo những quy định mới để quản lý lĩnh vực này chặt chẽ hơn trước. Người lao động cũng cần trang bị thêm kỹ năng mới để thích nghi với thị trường việc làm đang biến động từng ngày.</p>
+  <ul>
+    <li>Giáo dục đóng vai trò quan trọng trong việc chuẩn bị cho thế hệ tương lai.</li>
+    <li>Doanh nghiệp cần minh bạch hơn về cách họ thu thập và dùng dữ liệu người dùng.</li>
+  </ul>
+  <h3>Kết luận</h3>
+  <p>Công nghệ tự nó không tốt cũng không xấu; điều quyết định là cách chúng ta chọn sử dụng nó trong những năm sắp tới.</p>
+</article>
+
+<script>
+const store = { sync: {}, local: {} };
+const pick = (bag, q) => {
+  if (q === null || q === undefined) return { ...bag };
+  if (typeof q === "string") return q in bag ? { [q]: bag[q] } : {};
+  if (Array.isArray(q)) { const o = {}; q.forEach(k => { if (k in bag) o[k] = bag[k]; }); return o; }
+  const o = {}; Object.keys(q).forEach(k => (o[k] = k in bag ? bag[k] : q[k])); return o;
+};
+window.chrome = {
+  // Thêm ?v= cho CSS để trình duyệt không dùng bản cache cũ khi ta vừa sửa
+  // overlay.css (bản thật dùng chrome-extension:// nên không gặp chuyện này)
+  runtime: {
+    getURL: (p) => "../lamp-reader/" + p + (p.endsWith(".css") ? "?v=" + Date.now() : ""),
+    onMessage: { addListener() {} }
+  },
+  storage: {
+    sync:  { get: async (q) => pick(store.sync, q),  set: async (o) => Object.assign(store.sync, o) },
+    local: { get: async (q) => pick(store.local, q), set: async (o) => Object.assign(store.local, o) }
+  }
+};
+</script>
+<script src="../lamp-reader/content/defaults.js"></script>
+<script src="../lamp-reader/content/extractor.js"></script>
+<script src="../lamp-reader/content/engine.js"></script>
+<script src="../lamp-reader/content/reader.js"></script>
+<script>
+  window.addEventListener("load", () => setTimeout(() => window.__lampReader.open({}), 100));
+</script>
+</body>
+</html>

@@ -2,26 +2,8 @@
 // Tiêm script vào tab hiện tại khi người dùng bấm Alt+R, bấm nút trong popup,
 // hoặc chọn "Đọc bằng Lamp" từ menu chuột phải.
 
-const DEFAULTS = {
-  mode: "rsvp",
-  wpm: 350,
-  chunkSize: 1,
-  fontSize: 56,
-  fontFamily: "system",
-  customFont: "",
-  spacing: 0,
-  theme: "sepia",
-  orp: true,
-  ruler: true,
-  rhythm: true,
-  context: false,
-  warmup: false,
-  tts: false,
-  voiceURI: "",
-  restReminder: true,
-  bionic: false,
-  shortWords: false
-};
+importScripts("content/defaults.js");
+const DEFAULTS = self.LAMP_DEFAULTS;
 
 const MENU_ID = "lamp-read-selection";
 
@@ -56,7 +38,12 @@ async function launchReader(tabId, url, forceSelection = false) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["content/extractor.js", "content/engine.js", "content/reader.js"]
+      files: [
+        "content/defaults.js",
+        "content/extractor.js",
+        "content/engine.js",
+        "content/reader.js"
+      ]
     });
     const settings = await chrome.storage.sync.get(DEFAULTS);
     await chrome.tabs.sendMessage(tabId, { type: "LAMP_TOGGLE", settings, forceSelection });

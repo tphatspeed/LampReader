@@ -1,25 +1,6 @@
 // Lamp — popup.js
 
-const DEFAULTS = {
-  mode: "rsvp",
-  wpm: 350,
-  chunkSize: 1,
-  fontSize: 56,
-  fontFamily: "system",
-  customFont: "",
-  spacing: 0,
-  theme: "sepia",
-  orp: true,
-  ruler: true,
-  rhythm: true,
-  context: false,
-  warmup: false,
-  tts: false,
-  voiceURI: "",
-  restReminder: true,
-  bionic: false,
-  shortWords: false
-};
+const DEFAULTS = window.LAMP_DEFAULTS; // xem content/defaults.js
 
 const STEP = { wpm: 50, chunk: 1, size: 4 };
 const LIMIT = { wpm: [100, 1200], chunk: [1, 6], size: [24, 120] };

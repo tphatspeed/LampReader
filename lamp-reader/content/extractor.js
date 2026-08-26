@@ -67,7 +67,16 @@
     return clone;
   }
 
-  // Trả về danh sách khối kèm loại, để dựng dàn ý và giữ ranh giới đoạn
+  // Trả về danh sách khối kèm loại, để dựng dàn ý và giữ ranh giới đoạn.
+  // QUAN TRỌNG: engine.js (buildOutline) và reader.js (paintBlocksInto) đều
+  // phân nhánh theo `type` — thiếu trường này thì dàn bài rỗng và mọi khối
+  // đều bị vẽ thành <p>, mất hết tiêu đề trong chế độ Dẫn dòng.
+  function blockType(tag) {
+    if (/^h[1-4]$/.test(tag)) return "h";
+    if (tag === "li" || tag === "dd") return "li";
+    return "p";
+  }
+
   function toBlocks(clone) {
     const blocks = [];
     const seen = new Set();
@@ -79,15 +88,21 @@
       seen.add(key);
 
       const tag = el.tagName.toLowerCase();
-      const isHeading = /^h[1-4]$/.test(tag);
+      const type = blockType(tag);
+      // Tiêu đề quá dài thường là đoạn văn bị gắn nhầm thẻ h — không đưa vào
+      // dàn bài để danh sách khỏi loãng.
+      const isHeading = type === "h" && t.length < 140;
       blocks.push({
         text: t,
+        type: isHeading ? "h" : (type === "h" ? "p" : type),
         heading: isHeading,
         level: isHeading ? parseInt(tag[1], 10) : 0
       });
     });
     return blocks;
   }
+
+  const plainBlock = (t) => ({ text: t.trim(), type: "p", heading: false, level: 0 });
 
   window.__lampExtract = function extract(forceSelection) {
     // Chỉ ưu tiên đoạn bôi đen khi người dùng chủ động chọn "Đọc nhanh đoạn
@@ -100,7 +115,7 @@
         title: document.title,
         source: "selection",
         text: sel,
-        blocks: sel.split(/\n{2,}/).map((t) => ({ text: t.trim(), heading: false, level: 0 })),
+        blocks: sel.split(/\n{2,}/).map(plainBlock).filter((b) => b.text),
         headings: []
       };
     }
@@ -112,7 +127,7 @@
 
     if (text.length < 200) {
       text = (document.body.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
-      blocks = text.split(/\n{2,}/).map((t) => ({ text: t.trim(), heading: false, level: 0 }));
+      blocks = text.split(/\n{2,}/).map(plainBlock).filter((b) => b.text);
     }
 
     const headings = blocks
