@@ -141,8 +141,11 @@
     return c.length >= 4 && !STOP.has(c.toLowerCase()) && /\p{L}/u.test(c);
   }
 
-  function buildQuiz(tokens, upTo, count = 5, vietnamese = false) {
-    const read = tokens.slice(0, Math.max(1, upTo + 1));
+  // `from` cho phép hỏi riêng MỘT KHOẢNG vừa đọc (chế độ luyện tốc độ hỏi
+  // từng vòng), thay vì luôn hỏi từ đầu bài. Mặc định 0 = giữ nguyên hành vi cũ.
+  function buildQuiz(tokens, upTo, count = 5, vietnamese = false, from = 0) {
+    const start = Math.max(0, Math.min(from, tokens.length - 1));
+    const read = tokens.slice(start, Math.max(start + 1, upTo + 1));
 
     // Gom theo token thay vì tách chuỗi phẳng, để giữ lại vị trí token đầu
     // câu — cần cho nút "Xem lại đoạn này" khi ôn câu trả lời sai.
@@ -154,7 +157,9 @@
       if (CLAUSE_END.test(t.text) || i === read.length - 1) {
         const text = buf.map((x) => x.text).join(" ");
         const words = text.split(/\s+/);
-        if (words.length >= 9 && words.length <= 45) sentences.push({ text, words, token: startIdx });
+        // startIdx là chỉ số trong `read`; cộng `start` để ra chỉ số thật
+        // trong mảng tokens gốc, nếu không nút "Xem lại đoạn này" sẽ nhảy sai.
+        if (words.length >= 9 && words.length <= 45) sentences.push({ text, words, token: start + startIdx });
         buf = [];
       }
     });

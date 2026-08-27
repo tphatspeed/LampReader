@@ -1,207 +1,321 @@
-# Lamp — Chrome Extension đọc nhanh RSVP
+# Lamp — tài liệu sử dụng
 
-Đọc nhanh bất kỳ trang web nào bằng kỹ thuật RSVP (Rapid Serial Visual Presentation):
-từng từ hiện lần lượt tại một vị trí cố định, mắt không phải di chuyển, giảm việc
-đọc thầm trong đầu.
+Trình đọc nhanh RSVP cho Chrome. Trang này là tài liệu đầy đủ; xem
+[README ở gốc](../README.md) nếu chỉ cần giới thiệu ngắn.
 
-## So với SwiftRead
+**Mục lục**
 
-Lamp bám theo bộ tính năng cốt lõi của SwiftRead (RSVP, dẫn dòng, giọng đọc,
-PDF, chuột phải đọc đoạn bôi đen, tuỳ chỉnh phông/giao diện) và thêm những thứ
-SwiftRead hoặc không có, hoặc tính tiền:
+- [Cài đặt](#cài-đặt) · [Bắt đầu](#bắt-đầu) · [Phím tắt](#phím-tắt)
+- [Hai chế độ đọc](#hai-chế-độ-đọc) · [Bốn công cụ để hiểu bài](#bốn-công-cụ-để-hiểu-bài)
+- [Thư viện đọc dở](#thư-viện-đọc-dở) · [Bảng cài đặt](#bảng-cài-đặt)
+- [Cách Lamp xử lý chữ](#cách-lamp-xử-lý-chữ) · [PDF và EPUB](#pdf-và-epub)
+- [Quyền và dữ liệu](#quyền-và-dữ-liệu) · [So với SwiftRead](#so-với-swiftread)
+- [Dành cho người sửa code](#dành-cho-người-sửa-code)
 
-| | Lamp | SwiftRead |
-|---|---|---|
-| Giá | Miễn phí, không tài khoản | Bản trả phí ~$4/tháng cho tính năng đầy đủ |
-| Giới hạn dùng | Không | Bản miễn phí có hạn mức theo ngày cho TTS/PDF/ePub |
-| Dữ liệu | Chạy hoàn toàn tại máy, không gửi gì lên mạng | Dịch vụ đám mây |
-| Kiểm tra hiểu | Tự sinh câu hỏi từ chính bài vừa đọc, chấm xong gợi ý tốc độ | Thư viện bài tập nằm sau bản trả phí |
-| Thống kê | Điểm kiểm tra theo từng mức WPM — tìm ngưỡng của riêng bạn | Theo dõi tốc độ, không đối chiếu mức độ hiểu |
-| Tiếng Việt | Tự nhận diện, giảm nhịp 15%, quiz khoét cả cụm 2 âm tiết, phông xử lý dấu chồng | Xử lý như mọi ngôn ngữ Latin khác |
-| Dàn bài | Có, thụt lề theo cấp tiêu đề, đánh dấu mục đang đọc | Không |
-| Xem toàn văn khi dừng | Có — dừng là hiện cả bài kèm vị trí đang đọc | Không |
+---
 
-Chỗ SwiftRead vẫn hơn: đọc ePub/Kindle/Libby, giọng đọc AI chất lượng cao (Lamp
-dùng giọng có sẵn của hệ điều hành), và có ứng dụng di động riêng.
+## Cài đặt
 
-## Cài đặt (Load unpacked)
-
-1. Giải nén thư mục `lamp-reader/` ra một chỗ cố định trên máy (đừng xoá sau khi cài).
+1. Giải nén dự án ra một chỗ cố định trên máy (đừng xoá sau khi cài).
 2. Mở Chrome → gõ `chrome://extensions` vào thanh địa chỉ.
 3. Bật **Developer mode** (góc trên bên phải).
 4. Bấm **Load unpacked** → chọn thư mục `lamp-reader/`.
 5. Ghim icon Lamp vào thanh công cụ cho tiện.
 
-Xong. Mở một bài báo bất kỳ và nhấn **Alt+R**.
+> Sau khi cập nhật mã nguồn, bấm **Reload** trên thẻ Lamp rồi **tải lại trang web
+> đang test**. Nếu `manifest.json` đổi phần quyền thì phải **gỡ và cài lại** —
+> Reload không áp dụng được quyền mới.
 
-## Cách dùng
+## Bắt đầu
 
 Trình đọc **không tự chạy** khi mở — nó dừng sẵn ở từ đầu tiên, chờ bạn nhấn `Space`.
 
-| Thao tác | Kết quả |
+| Muốn | Làm |
 |---|---|
-| `Alt+R` | Mở trình đọc trên trang hiện tại (ở trạng thái dừng), luôn đọc cả trang |
-| Bấm icon Lamp | Popup: đọc trang này, đọc file PDF, chỉnh tốc độ/số từ/cỡ chữ |
-| Bôi đen đoạn văn → chuột phải | "Đọc nhanh đoạn này bằng Lamp" — chỉ đọc đúng đoạn đã chọn |
-| `Space` | Phát / dừng |
-| Bấm vào vùng chữ | Phát / dừng (vùng bấm lớn, tiện trên điện thoại) |
-| `←` / `→` | Lùi / tiến 10 từ |
-| `Shift` + `←` | Đọc lại câu hiện tại |
-| `Shift` + `→` | Nhảy sang câu sau |
-| `↑` / `↓` | Tăng / giảm tốc độ, bước 50 WPM |
-| `+` / `-` | Tăng / giảm cỡ chữ, bước 4px |
-| `S` | Mở bảng cài đặt |
-| `R` | Đọc lại từ đầu |
-| `Esc` | Đóng bảng cài đặt, hoặc đóng trình đọc |
+| Đọc trang đang mở | `Alt+R`, hoặc bấm icon Lamp → **Đọc trang này** |
+| Chỉ đọc một đoạn | Bôi đen đoạn đó → chuột phải → **Đọc nhanh đoạn này bằng Lamp** |
+| Đọc file PDF / EPUB | Bấm icon Lamp → **Đọc file PDF…** → chọn hoặc kéo thả file |
+| Đọc tiếp bài dang dở | Bấm icon Lamp → chọn trong danh sách **Đang đọc dở** |
 
-Ba nút `−` / `+` ngay dưới nút phát chỉnh **tốc độ** (bước 50 WPM), **số từ mỗi lần**
-(1–6) và **cỡ chữ** (24–120px). Vị trí đọc được lưu tự động theo từng trang, mở lại
-là đọc tiếp chỗ cũ.
+`Alt+R` luôn đọc **cả trang**, kể cả khi trên trang đang có sẵn đoạn bôi đen sót
+lại. Muốn đọc riêng một đoạn thì dùng menu chuột phải.
+
+## Phím tắt
+
+| Phím | Kết quả |
+|---|---|
+| `Space` | Phát / dừng (bấm vào vùng chữ cũng được — vùng bấm rất lớn) |
+| `←` / `→` | Lùi / tiến 10 cụm |
+| `Shift`+`←` | Đọc lại câu hiện tại |
+| `Shift`+`→` | Nhảy sang câu sau |
+| `↑` / `↓` | Tăng / giảm tốc độ, bước 50 WPM |
+| `+` / `−` | Tăng / giảm cỡ chữ, bước 4px |
+| `M` | Đổi chế độ đọc |
+| `O` | Dàn bài |
+| `Q` | Kiểm tra hiểu |
+| `H` | Lưu câu đang đọc vào trích đoạn |
+| `S` | Bảng cài đặt |
+| `R` | Đọc lại từ đầu |
+| `Esc` | Đóng bảng đang mở, hoặc đóng trình đọc |
+
+Ba bộ `−`/`+` dưới nút phát chỉnh **tốc độ** (bước 50 WPM, 100–1200), **số từ mỗi
+lần** (1–6) và **cỡ chữ** (24–120px).
 
 Dùng `Tab` để chọn thanh tiến độ rồi lái bằng `←` `→` `PageUp` `PageDown` `Home`
 `End` — toàn bộ trình đọc điều khiển được bằng bàn phím, không cần chuột.
 
-### Hai chế độ đọc
+## Hai chế độ đọc
 
 | Chế độ | Cách hoạt động | Nên dùng khi |
 |---|---|---|
 | **RSVP** | Từng cụm hiện ở giữa màn hình, mắt đứng yên | Tin tức, blog, đọc lần một để phân loại |
 | **Dẫn dòng** | Giữ nguyên đoạn văn, vệt sáng chạy theo | Tài liệu khó, cần đọc lại và nhìn trước |
 
-Đổi chế độ bằng thanh chọn trong dock hoặc phím `M`. Chế độ Dẫn dòng giữ lại được
-hai thứ mà RSVP lấy mất: khả năng đọc lại và khả năng nhìn trước từ kế tiếp — nên
-đây mới là chế độ dùng cho nội dung bạn cần thật sự hiểu.
+Đổi bằng thanh chọn trong dock hoặc phím `M`.
 
-Ở chế độ RSVP, mỗi lần dừng (`Space`, kéo thanh tiến độ, lùi/tiến...) trình đọc
-tự hiện toàn bộ văn bản kèm vị trí đang đọc được tô sáng, giống hệt chế độ Dẫn
-dòng — giúp nắm lại mạch bài trước khi đọc tiếp. Bấm vào một từ bất kỳ trong lúc
-này để nhảy thẳng tới đó; bấm `Space` hoặc chỗ trống để đọc tiếp là màn hình
-quay lại hiện từng từ như bình thường.
+RSVP đánh đổi hai thứ để lấy tốc độ: bạn không đọc lại được, và không nhìn thấy từ
+kế tiếp. Chế độ **Dẫn dòng** giữ lại cả hai — nên đây mới là chế độ dùng cho nội
+dung bạn cần thật sự hiểu.
 
-### Dàn bài (nút danh sách, phím `O`)
+**Dừng là thấy toàn bài.** Ở chế độ RSVP, mỗi lần dừng (`Space`, kéo thanh tiến độ,
+lùi/tiến…) trình đọc tự hiện toàn bộ văn bản kèm vị trí đang đọc được tô sáng.
+Bấm vào từ bất kỳ để nhảy thẳng tới đó; đọc tiếp là màn hình quay lại hiện từng cụm.
 
-Liệt kê toàn bộ tiêu đề mục của trang kèm vị trí phần trăm, thụt lề theo cấp
-(h1/h2/h3 → 3 mức), và đánh dấu mục bạn đang đọc. Bấm vào là nhảy thẳng tới đó.
-Bù lại phần cấu trúc văn bản mà RSVP xoá mất.
+## Bốn công cụ để hiểu bài
 
-### Kiểm tra hiểu (phím `Q`)
+### Dàn bài — phím `O`
 
-Đọc xong sẽ tự hiện, hoặc bấm `Q` bất cứ lúc nào. Ứng dụng khoét một từ khỏi năm
-câu bạn vừa đọc và đưa bốn phương án. Chấm xong sẽ gợi ý điều chỉnh tốc độ dựa
-trên điểm số. Toàn bộ sinh tại chỗ, không gửi gì lên mạng.
+Liệt kê toàn bộ tiêu đề mục kèm vị trí phần trăm, thụt lề theo cấp (h1/h2/h3 → 3
+mức), và đánh dấu mục bạn đang đọc. Bấm là nhảy tới. Bù lại phần cấu trúc văn bản
+mà RSVP xoá mất.
 
-Với tiếng Việt, ứng dụng khoét cả cụm hai âm tiết thay vì một âm tiết, vì khoét
-"trực" trong "trực quan" thì câu hỏi vừa dễ vừa vô nghĩa.
+### Kiểm tra hiểu — phím `Q`
 
-### Bảng cài đặt (nút ⚙)
+Đọc xong sẽ tự hiện, hoặc bấm `Q` bất cứ lúc nào. Ứng dụng khoét một từ khỏi các
+câu bạn vừa đọc và đưa bốn phương án; số câu hỏi tăng theo lượng đã đọc (3–8 câu).
 
-Kéo được bằng thanh tiêu đề (có vạch xám nhỏ ở giữa để nhận ra) — kéo sang một
-bên hoặc lên trên để vẫn nhìn thấy chữ đang đọc trong lúc chỉnh phông/cỡ chữ.
-Đóng rồi mở lại là bảng về đúng vị trí mặc định.
+- Từ bị khoét chọn theo **độ hiếm trong bài**, không phải từ nằm giữa câu — khoét
+  từ lặp đi lặp lại chỉ kiểm tra trí nhớ mặt chữ.
+- Phương án nhiễu không bao giờ là từ có mặt trong chính câu đang hỏi.
+- Sai câu nào thì **hiện lại nguyên câu gốc** kèm nút *Xem lại đoạn này* để nhảy về.
+- Chấm xong gợi ý điều chỉnh tốc độ theo điểm số.
 
-- **Phông chữ** — Hệ thống, Be Vietnam, Tahoma, Serif (Literata), Noto Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy. Mỗi nút tự hiển thị bằng đúng phông nó đại diện; nút nào có dấu ⚠ nghĩa là file phông trong `fonts/` không nạp được (xem `fonts/README.txt`)
-- **Giao diện** — Giấy, Sepia, Xám, Đêm, Tương phản cao (đo theo WCAG: chữ/nền ≥ 7:1, xem thêm ghi chú tương phản trong `content/overlay.css`)
-- **Giãn chữ** — nới khoảng cách giữa các ký tự, 0–12px
-- **Giọng đọc** — bật text-to-speech, chữ chạy theo giọng qua sự kiện `onboundary`; chọn được giọng, tự ưu tiên giọng cùng ngôn ngữ với bài
+Toàn bộ sinh tại chỗ, không gọi mạng.
+
+### Trích đoạn — phím `H`
+
+Đang đọc bấm `H` là lưu nguyên câu hiện tại. Nút dấu trang trên thanh tiêu đề mở
+danh sách: bấm một câu để nhảy về đúng chỗ, hoặc **Chép dạng Markdown** / **Tải
+file .md** để đưa sang ứng dụng ghi chú. Lưu theo từng tài liệu, nằm ở máy bạn.
+
+### Luyện tốc độ — bảng cài đặt → *Bắt đầu buổi luyện*
+
+Đọc chính bài đang mở ở 3 mức tốc độ tăng dần (chậm hơn 100, mức hiện tại, nhanh
+hơn 100 WPM). Hết mỗi vòng, ứng dụng kiểm tra hiểu ngay bằng 3 câu hỏi. Kết thúc
+sẽ chỉ ra mức nhanh nhất mà bạn vẫn hiểu tốt (≥80%) và cho bấm một nút để dùng
+luôn mức đó.
+
+Độ dài mỗi vòng tự chia theo phần còn lại của bài, nên bài ngắn vẫn luyện được.
+Đóng bảng giữa chừng thì tốc độ trở lại như trước khi luyện.
+
+## Thư viện đọc dở
+
+Bấm icon Lamp là thấy danh sách những bài bạn đọc dở, kèm phần trăm và thời gian.
+Bấm một mục để mở lại và đọc tiếp đúng chỗ cũ.
+
+Danh sách dựng từ chính dữ liệu tiến trình có sẵn — không có kho dữ liệu riêng
+nào. Giữ 60 tài liệu gần nhất; bài nào đọc quá 95% thì tự ẩn đi.
+
+Vị trí đọc lưu theo toạ độ **(khối, từ)** chứ không theo số thứ tự cụm, nên đổi
+"số từ mỗi lần" cũng không mất chỗ đang đọc.
+
+## Bảng cài đặt
+
+Mở bằng nút ⚙ hoặc phím `S`. **Kéo được** bằng thanh tiêu đề (có vạch xám nhỏ ở
+giữa để nhận ra) — kéo sang một bên để vẫn nhìn thấy chữ đang đọc trong lúc chỉnh
+phông/cỡ chữ. Đóng rồi mở lại là bảng về vị trí mặc định.
+
+| Mục | Nội dung |
+|---|---|
+| **Phông chữ** | Hệ thống, Be Vietnam, Tahoma, Serif (Literata), Noto Serif, Mono, hoặc gõ tên phông bất kỳ đã cài trên máy. Mỗi nút tự hiển thị bằng đúng phông nó đại diện; nút có dấu ⚠ nghĩa là file phông trong `fonts/` không nạp được |
+| **Giao diện** | Theo hệ thống (tự đổi sáng/tối theo máy), Giấy, Sepia, Xám, Đêm, Tương phản cao |
+| **Giãn chữ** | Nới khoảng cách giữa các ký tự, 0–12px |
+| **Giọng đọc** | Bật text-to-speech, chữ chạy theo giọng qua sự kiện `onboundary`; chọn được giọng, tự ưu tiên giọng cùng ngôn ngữ với bài |
+
+Các công tắc:
+
 - **Tô chữ trung tâm (ORP)** — điểm neo mắt, có thêm gạch chân nên không phụ thuộc riêng vào màu
 - **Thanh dẫn** — hai vạch canh vị trí mắt
 - **Nhịp dấu câu** — dừng cuối câu, câu càng dài dừng càng lâu
-- **Bỏ qua từ ngắn** — từ đệm ít nghĩa (và, của, là...) hiện nhanh hơn 40%, dồn thời gian cho từ mang nội dung
+- **Bỏ qua từ ngắn** — từ đệm ít nghĩa (và, của, là…) hiện nhanh hơn 40%, dồn thời gian cho từ mang nội dung
 - **Xem ngữ cảnh** — hiện các từ xung quanh, mờ hơn
 - **Khởi động chậm** — 40 cụm đầu chạy ở 65% tốc độ rồi tăng dần
 - **Nhắc nghỉ mắt** — cứ 20 phút đọc thì dừng, đếm ngược 20 giây (quy tắc 20-20-20)
-- **Thống kê** — số từ và thời gian đọc 7 ngày qua, WPM thực tế, và điểm kiểm tra theo từng mức tốc độ
 
-### Ngoặc, ngoặc kép, dấu câu
+Cuối bảng là **Thống kê**: số từ và thời gian đọc 7 ngày qua, WPM thực tế, và điểm
+kiểm tra theo từng mức tốc độ — đây là thứ giúp bạn tìm ngưỡng của riêng mình bằng
+dữ liệu chứ không phải cảm giác.
 
-Dấu `()`, `""`, `“”` bám ở đầu/cuối một từ được tách ra và tô nhạt hơn (ở mọi
-chế độ) để mắt lướt qua nhanh, không lẫn vào nội dung chính — và để điểm neo
-ORP rơi đúng vào chữ cái chứ không rơi trúng dấu. Ở RSVP, từ mở hoặc đóng một
-đoạn trong ngoặc/trích dẫn được giữ lại lâu hơn một nhịp, để kịp nhận ra đây
-là phần chú thích chứ không phải mạch câu chính. Không áp dụng cho dấu nháy
-đơn giữa từ (như "don't") để khỏi làm chậm nhầm từ viết tắt.
+Bảng màu đo theo WCAG (chữ/nền ≥ 7:1). Ghi chú vì sao chọn từng màu nằm trong
+`content/overlay.css`.
+
+## Cách Lamp xử lý chữ
 
 ### Tiếng Việt
 
-Ứng dụng tự nhận diện văn bản tiếng Việt qua dấu thanh, rồi giảm nhịp 15%. Lý do:
-tiếng Việt là ngôn ngữ đơn âm tiết, mỗi "từ" cách bởi dấu cách thường chỉ là một
-âm tiết, nên cùng một mức WPM thì tiếng Việt trôi nhanh hơn tiếng Anh về mặt ý.
+Ứng dụng tự nhận diện văn bản tiếng Việt qua dấu thanh, rồi **giảm nhịp 15%**. Lý
+do: tiếng Việt là ngôn ngữ đơn âm tiết, mỗi "từ" cách bởi dấu cách thường chỉ là
+một âm tiết, nên cùng một mức WPM thì tiếng Việt trôi nhanh hơn tiếng Anh về mặt ý.
 
-Muốn dùng phông cố định không phụ thuộc máy, xem `fonts/README.txt`.
+Vì vậy phần kiểm tra hiểu cũng khoét **cả cụm hai âm tiết** thay vì một âm tiết —
+khoét "trực" trong "trực quan" thì câu hỏi vừa dễ vừa vô nghĩa.
 
-## Hỗ trợ PDF
+Ước lượng thời gian còn lại và tốc độ giọng đọc đều tính theo nhịp thật (đã trừ
+15%), không lấy thẳng số WPM.
 
-Thư viện pdf.js **đã được nhúng sẵn** trong `vendor/` (bản v6.2.108, dạng ES module).
-Không cần tải thêm gì.
+### Ngoặc, ngoặc kép, dấu câu
 
-Có 2 cách mở:
+Dấu `()`, `""`, `“”` bám ở đầu/cuối một từ được tách ra và tô nhạt hơn ở mọi chế
+độ, để mắt lướt qua nhanh và để điểm neo ORP rơi đúng vào chữ cái chứ không rơi
+trúng dấu. Ở RSVP, từ mở hoặc đóng một đoạn trong ngoặc/trích dẫn được giữ lâu hơn
+một nhịp, đủ để nhận ra đây là phần chú thích chứ không phải mạch câu chính.
 
-- Bấm icon Lamp → **Đọc file PDF…** → chọn hoặc kéo thả file PDF từ máy.
-- Đang mở một link `.pdf` trong Chrome → nhấn **Alt+R**, extension tự chuyển sang
-  trang đọc PDF của nó.
+Không áp dụng cho dấu nháy đơn giữa từ (như "don't") để khỏi làm chậm nhầm từ viết tắt.
 
-Với PDF nằm trên máy (`file://`), cần bật thêm **Allow access to file URLs** trong
-phần chi tiết của extension tại `chrome://extensions`.
+### Ngắt cụm
 
-Lưu ý: PDF dạng ảnh quét không có lớp chữ nên không trích xuất được — muốn hỗ trợ
-thì cần thêm OCR (ví dụ Tesseract.js).
+Một cụm không bao giờ vắt qua ranh giới câu, kể cả khi bạn đặt "số từ mỗi lần" lớn
+— não cần mốc cuối câu để tổng hợp nghĩa, ghép "…hết. Câu mới…" vào một khung sẽ
+phá mốc đó.
 
-### Nếu muốn cập nhật pdf.js sau này
+## PDF và EPUB
 
-Tải bản *prebuilt* mới từ https://mozilla.github.io/pdf.js/getting_started/, rồi
-thay 2 file trong `vendor/` và giữ đúng tên: `pdf.mjs` và `pdf.worker.mjs`.
-Từ v4 trở đi pdf.js chỉ phát hành dạng ES module, nên `viewer.js` phải dùng
-`import` chứ không dùng được biến toàn cục `pdfjsLib` như bản UMD đời cũ.
+Bấm icon Lamp → **Đọc file PDF…** → chọn hoặc kéo thả file **PDF hoặc EPUB** từ máy.
+Hoặc đang mở một link `.pdf` trong Chrome → nhấn `Alt+R`, extension tự chuyển sang
+trang đọc riêng của nó.
+
+**PDF.** Thư viện pdf.js đã nhúng sẵn trong `vendor/` (v6.2.108, dạng ES module) —
+không cần tải thêm gì.
+
+- File trên máy (`file://`): cần bật thêm **Allow access to file URLs** trong phần
+  chi tiết của extension tại `chrome://extensions`.
+- File từ đường dẫn trên mạng: lần đầu sẽ hiện nút **Cấp quyền rồi thử lại** (vì
+  extension không xin sẵn quyền cho mọi tên miền).
+- PDF dạng ảnh quét không có lớp chữ nên không trích xuất được — cần OCR
+  (ví dụ Tesseract.js) mới đọc được.
+
+**EPUB** đọc được mà không cần thư viện ngoài nào. EPUB vốn là file ZIP chứa XHTML,
+và trình duyệt đã có sẵn `DecompressionStream("deflate-raw")` — đúng thuật toán ZIP
+dùng — nên `content/epub.js` chỉ cần tự đọc bảng thư mục của ZIP rồi đi theo `spine`
+trong file `.opf`. Nhờ vậy giữ được cả cấu trúc tiêu đề/đoạn/danh sách, dàn bài
+dùng được luôn. Chưa hỗ trợ EPUB có DRM.
+
+## Quyền và dữ liệu
+
+**Extension không xin quyền truy cập trang web nào khi cài.** `Alt+R`, nút trong
+popup và menu chuột phải chạy được nhờ `activeTab` — quyền tạm, chỉ cho đúng tab
+bạn đang mở, chỉ trong lúc bạn chủ động gọi.
+
+Hai việc cần quyền rộng hơn, và chỉ hỏi đúng lúc cần:
+
+- Mở lại một bài từ thư viện → xin quyền cho **riêng tên miền đó**.
+- Tải PDF từ đường dẫn mạng → nút **Cấp quyền rồi thử lại** trong trang đọc PDF.
+
+Muốn khỏi bị hỏi từng trang thì bấm **Cấp quyền** ở cuối popup một lần. Thu hồi
+được bất cứ lúc nào, cũng ở đó.
+
+Toàn bộ dữ liệu — tiến trình đọc, trích đoạn, thống kê, cài đặt — nằm trong
+`chrome.storage` trên máy bạn. Không có máy chủ, không tài khoản, không gọi mạng.
+Phần kiểm tra hiểu và luyện tốc độ sinh câu hỏi ngay tại chỗ.
+
+## So với SwiftRead
+
+Lamp bám theo bộ tính năng cốt lõi của SwiftRead (RSVP, dẫn dòng, giọng đọc, PDF,
+chuột phải đọc đoạn bôi đen, tuỳ chỉnh phông/giao diện) và thêm những thứ SwiftRead
+hoặc không có, hoặc tính tiền:
+
+| | Lamp | SwiftRead |
+|---|---|---|
+| Giá | Miễn phí, không tài khoản | Bản trả phí ~$4/tháng cho tính năng đầy đủ |
+| Giới hạn dùng | Không | Bản miễn phí có hạn mức theo ngày cho TTS/PDF/ePub |
+| Dữ liệu | Chạy hoàn toàn tại máy | Dịch vụ đám mây |
+| Quyền truy cập | Không xin quyền nào khi cài | Xin quyền đọc mọi trang ngay từ đầu |
+| Kiểm tra hiểu | Tự sinh từ chính bài vừa đọc, sai thì hiện lại câu gốc | Thư viện bài tập sau bản trả phí |
+| Luyện tốc độ | Đọc bài này ở 3 mức WPM, quiz từng mức, chỉ ra mức phù hợp | Sau bản trả phí |
+| Thống kê | Điểm kiểm tra theo từng mức WPM | Theo dõi tốc độ, không đối chiếu mức độ hiểu |
+| Tiếng Việt | Nhận diện và giảm nhịp riêng, quiz theo cụm 2 âm tiết, phông xử lý dấu chồng | Như mọi ngôn ngữ Latin khác |
+| Dàn bài | Có, thụt lề theo cấp, đánh dấu mục đang đọc | Không |
+| Xem toàn văn khi dừng | Có | Không |
+| Trích đoạn | Lưu bằng `H`, xuất Markdown | Không |
+| EPUB | Có (tự đọc ZIP, không nhúng thư viện) | Có |
+
+Chỗ SwiftRead vẫn hơn: đọc Kindle/Libby, giọng đọc AI chất lượng cao (Lamp dùng
+giọng có sẵn của hệ điều hành), và có ứng dụng di động riêng.
+
+---
+
+# Dành cho người sửa code
 
 ## Cấu trúc file
 
 ```
-lamp-reader/
-├── manifest.json          # Khai báo extension (Manifest V3)
-├── background.js          # Service worker: nhận Alt+R, tiêm script vào tab
+lamp-reader/                 ← trỏ tới đây khi Load unpacked
+├── manifest.json            Khai báo extension (Manifest V3)
+├── background.js            Service worker: Alt+R, menu chuột phải, tiêm script
 ├── content/
-│   ├── defaults.js        # NGUỒN DUY NHẤT của cài đặt mặc định (dùng chung cả 4 nơi)
-│   ├── extractor.js       # Tách nội dung chính khỏi menu/quảng cáo/sidebar
-│   ├── engine.js          # Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
-│   ├── reader.js          # Giao diện overlay RSVP (Shadow DOM)
-│   └── overlay.css        # 5 theme màu + bố cục overlay
-├── fonts/                 # Be Vietnam Pro, Literata, Noto Serif (nhúng sẵn)
-├── popup/
-│   ├── popup.html         # Bảng cài đặt khi bấm icon
-│   └── popup.js
-├── viewer/
-│   ├── viewer.html        # Trang đọc PDF riêng
-│   └── viewer.js          # Trích xuất chữ bằng pdf.js
-├── vendor/                # pdf.mjs + pdf.worker.mjs (đã nhúng sẵn)
+│   ├── defaults.js          NGUỒN DUY NHẤT của cài đặt mặc định
+│   ├── extractor.js         Tách nội dung chính khỏi menu/quảng cáo/sidebar
+│   ├── engine.js            Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
+│   ├── epub.js              Đọc EPUB: tự giải nén ZIP, đi theo spine
+│   ├── reader.js            Giao diện overlay RSVP (Shadow DOM)
+│   └── overlay.css          5 bảng màu (+ tuỳ chọn theo hệ thống) và bố cục
+├── popup/                   Popup khi bấm icon: thư viện, cài đặt nhanh, quyền
+├── viewer/                  Trang đọc PDF/EPUB riêng
+├── fonts/                   Be Vietnam Pro, Literata, Noto Serif (nhúng sẵn)
+├── vendor/                  pdf.mjs + pdf.worker.mjs
 └── icons/
 
-test/                      # Chỉ dùng khi phát triển, KHÔNG nằm trong extension
-├── engine.test.js         # 53 phép kiểm thử engine (chạy bằng node, không cần trình duyệt)
-├── harness.html           # 56 phép kiểm thử tích hợp, chạy thật trong trình duyệt
-└── demo.html              # Bài viết mẫu để xem nhanh giao diện
+test/                        ← KHÔNG nằm trong extension
+├── engine.test.js           53 phép — logic thuần, chạy bằng node
+├── harness.html             85 phép — trình đọc, chạy thật trong trình duyệt
+├── popup.test.html          29 phép — popup, thư viện, cấp quyền
+├── epub.test.html           24 phép — đọc EPUB
+├── fixtures/                File EPUB/ZIP mẫu
+└── demo.html                Bài viết mẫu để xem nhanh giao diện
 ```
 
-### Chạy kiểm thử
+Một điều đáng nhớ: **cài đặt mặc định chỉ khai báo ở `content/defaults.js`**. Trước
+đây danh sách này bị chép ra bốn nơi và chúng lệch nhau lúc nào không hay — đó là
+nguyên nhân lỗi "mở PDF là mất hết phông và giao diện đã chọn". Thêm tuỳ chọn mới
+thì chỉ sửa ở đó.
 
-Phần logic thuần chạy thẳng bằng node, không cần trình duyệt:
+## Chạy kiểm thử
+
+Tổng cộng **191 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
+`chrome`), không phải bản sao.
+
+Phần logic thuần chạy thẳng bằng node:
 
 ```bash
 node test/engine.test.js
 ```
 
-Phần tích hợp cần được phục vụ qua HTTP (mở thẳng bằng `file://` sẽ bị chặn khi
-nạp CSS). Từ thư mục gốc của dự án:
+Phần tích hợp cần được phục vụ qua HTTP (mở bằng `file://` sẽ bị chặn khi nạp CSS).
+Từ thư mục gốc của dự án:
 
 ```bash
 python3 -m http.server 8899
 ```
 
-Rồi mở `http://localhost:8899/test/harness.html` — trang tự nạp đúng các file
-trong `lamp-reader/` (chỉ giả lập API `chrome`), tự lái giao diện và in ra số
-phép kiểm thử đạt/hỏng. `test/demo.html` mở sẵn trình đọc trên một bài mẫu để
-xem nhanh giao diện mà không cần cài extension.
+Rồi mở lần lượt `harness.html`, `popup.test.html`, `epub.test.html` dưới
+`http://localhost:8899/test/`. Mỗi trang tự lái giao diện và in ra số phép đạt/hỏng.
 
-Nếu sửa code mà kết quả không đổi, thêm `?cb=1` vào URL để bỏ qua cache.
+`test/demo.html` mở sẵn trình đọc trên một bài mẫu để xem nhanh giao diện mà không
+cần cài extension.
+
+> Sửa code mà kết quả không đổi thì thêm `?cb=1` vào URL để bỏ qua cache.
+> Nếu bộ kiểm thử chạy chậm bất thường, đưa tab ra trước — trình duyệt bóp timer
+> của tab đang ẩn.
 
 ## Muốn sửa gì thì sửa ở đâu
 
@@ -210,23 +324,46 @@ Nếu sửa code mà kết quả không đổi, thêm `?cb=1` vào URL để b�
 | Thêm/đổi một tuỳ chọn cài đặt | `content/defaults.js` — chỉ sửa ở đây, 4 nơi còn lại tự lấy theo |
 | Thuật toán tách nội dung chính | `content/extractor.js`, hàm `scoreNode` |
 | Loại khối (tiêu đề/đoạn/danh sách) | `content/extractor.js`, hàm `blockType` |
-| Cách tô sáng chạy theo chữ | `content/reader.js`, hàm `highlightInto` |
 | Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
+| Cách sinh câu hỏi kiểm tra | `content/engine.js`, hàm `buildQuiz` |
 | Vị trí chấm ORP | `content/reader.js`, hàm `pivotIndex` |
-| Nội dung focus view khi RSVP dừng | `content/reader.js`, hàm `updateFocusOverlay`, `paintBlocksInto` |
-| Phông chữ nhúng sẵn (Be Vietnam, Serif, Noto Serif) | `content/overlay.css`, các khối `@font-face`; xem `fonts/README.txt` |
+| Cách tô sáng chạy theo chữ | `content/reader.js`, hàm `highlightInto` |
+| Nội dung hiện khi RSVP dừng | `content/reader.js`, `updateFocusOverlay` / `paintBlocksInto` |
+| Tách/tô nhạt dấu ngoặc ở đầu-cuối từ | `content/reader.js`, hàm `splitWord` |
+| Chia vòng luyện tốc độ | `content/reader.js`, hàm `planRounds` |
+| Kéo bảng cài đặt/dàn bài/quiz | `content/reader.js`, `makeDraggable`; CSS `.sheet-head`, `.sheet.dragging` |
 | Kiểm tra phông có nạp được không | `content/reader.js`, hàm `checkFonts` |
-| Tách/tô nhạt dấu ngoặc, ngoặc kép ở đầu-cuối từ | `content/reader.js`, hàm `splitWord` |
-| Kéo bảng cài đặt/dàn bài/quiz | `content/reader.js`, hàm `makeDraggable`; CSS `.sheet-head`, `.sheet.dragging` |
-| Màu sắc, theme, bố cục responsive | `content/overlay.css` |
+| Danh sách "đang đọc dở" | `popup/popup.js`, hàm `readLibrary` |
+| Đọc EPUB / thêm định dạng khác | `content/epub.js`, hàm `parse` |
 | Cách ghép dòng PDF thành đoạn | `viewer/viewer.js`, hàm `itemsToParagraphs` |
+| Màu sắc, theme, bố cục responsive | `content/overlay.css` |
+| Phông chữ nhúng sẵn | `content/overlay.css` (các khối `@font-face`); xem `fonts/README.txt` |
 | Phím tắt mặc định | `manifest.json`, mục `commands` |
 
-Sau mỗi lần sửa: vào `chrome://extensions` → bấm **Reload** trên thẻ Lamp → tải lại trang web đang test.
+## Vài chỗ dễ vấp
+
+- **Overlay nằm trong Shadow DOM.** Listener bàn phím gắn ở `document` sẽ nhận
+  `e.target` đã bị retarget về phần tử host (luôn là `DIV`), không bao giờ thấy
+  `INPUT`. Muốn biết phần tử thật thì dùng `e.composedPath()[0]` — nếu không, gõ
+  chữ vào ô nhập sẽ kích hoạt phím tắt.
+- **`chrome.storage.sync` giới hạn 120 lượt ghi/phút.** Giữ phím `↑` là bàn phím
+  tự lặp ~30 lần/giây, chưa tới 5 giây đã vượt hạn mức. Mọi lượt ghi đều được gộp
+  (debounce) và ghi ngay khi đóng trình đọc hoặc rời trang.
+- **`block.type` là bắt buộc.** `buildOutline` và `paintBlocksInto` đều phân nhánh
+  theo nó; thiếu trường này thì dàn bài rỗng và mọi khối bị vẽ thành `<p>`.
+- **Cập nhật pdf.js:** tải bản *prebuilt* mới từ
+  <https://mozilla.github.io/pdf.js/getting_started/>, thay 2 file trong `vendor/`
+  và giữ đúng tên `pdf.mjs` + `pdf.worker.mjs`. Từ v4 trở đi pdf.js chỉ phát hành
+  dạng ES module, nên `viewer.js` phải dùng `import` chứ không dùng được biến toàn
+  cục `pdfjsLib` như bản UMD đời cũ.
 
 ## Ý tưởng mở rộng
 
-- **Tính thời lượng theo âm tiết thay vì ký tự** — với tiếng Việt, thời gian hiện
-  một cụm hiện tính theo độ dài chuỗi ký tự (`content/engine.js`, `tokenDelay`);
-  chính xác hơn nếu tính theo số âm tiết thật, vì độ dài ký tự không phản ánh
-  đúng số "nhịp" cần đọc.
+- **OCR cho PDF ảnh quét** — Tesseract.js, đổi lại gói cài nặng thêm đáng kể.
+- **Tính nhịp theo âm tiết thay vì ký tự** — với tiếng Việt, thời lượng một cụm
+  hiện tính theo độ dài chuỗi (`engine.js`, `tokenDelay`); đếm âm tiết thật sẽ sát
+  hơn vì độ dài ký tự không phản ánh đúng số nhịp cần đọc.
+- **Đồng bộ tiến trình giữa các máy** — hiện lưu ở `storage.local`. Chuyển sang
+  `storage.sync` được, nhưng phải cắt bớt vì quota chỉ 100KB.
+- **Đa ngôn ngữ giao diện** — hiện hardcode tiếng Việt; cần `_locales` nếu muốn
+  đưa lên Chrome Web Store cho người dùng quốc tế.

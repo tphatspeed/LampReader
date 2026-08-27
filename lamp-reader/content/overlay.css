@@ -507,6 +507,11 @@ kbd {
   border-radius: 50%;
 }
 .swatch.on { border-color: var(--accent); }
+/* Nửa sáng nửa tối — báo hiệu ô này bám theo hệ điều hành */
+.swatch[data-theme="auto"] i {
+  background: linear-gradient(135deg, #FBF9F4 0 50%, #14120E 50% 100%);
+  border: 1px solid var(--line);
+}
 .swatch[data-theme="paper"] i    { background: #FBF9F4; border: 1px solid #DFD9CC; }
 .swatch[data-theme="sepia"] i    { background: #F4EAD7; border: 1px solid #D8C8AA; }
 .swatch[data-theme="gray"] i     { background: #23272E; }
@@ -772,6 +777,77 @@ kbd {
 }
 .quiz-result b { font-size: 17px; color: var(--accent); }
 .quiz-result span { color: var(--muted); }
+
+.quiz-round {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.hint {
+  display: block;
+  margin-top: 9px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* ==================== Trích đoạn đã lưu ==================== */
+
+.hl-list { display: flex; flex-direction: column; gap: 8px; }
+.hl-item { display: flex; align-items: flex-start; gap: 6px; }
+.hl-text {
+  flex: 1;
+  text-align: left;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 10px 10px 4px;
+  background: var(--raise);
+  color: var(--text);
+  font-family: var(--word-font);
+  font-size: 14px;
+  line-height: 1.65;
+  cursor: pointer;
+}
+.hl-text:hover { border-color: var(--accent); }
+.hl-del {
+  flex: none;
+  width: 30px; height: 30px;
+  margin-top: 6px;
+  border: none; border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 17px; line-height: 1;
+  cursor: pointer;
+}
+.hl-del:hover { background: var(--raise); color: var(--accent); }
+.hl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.hl-actions .quiz-review { flex: 1 1 auto; min-width: 120px; }
+
+/* Thông báo chớp nhoáng khi lưu trích đoạn */
+.flash {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18);
+  pointer-events: none;
+  animation: focus-in .15s ease-out;
+}
+.flash[hidden] { display: none; }
 
 /* ==================== Nghỉ mắt ==================== */
 

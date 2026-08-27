@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Lamp — kiểm thử popup</title>
+<style>
+  body { font: 14px/1.6 -apple-system, system-ui, sans-serif; margin: 20px; background:#111; color:#ddd; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+  .ok { color: #6bd06b; } .fail { color: #ff6b6b; font-weight: 700; }
+  .head { color: #f2a93b; margin-top: 10px; display:block; }
+  iframe { width: 340px; height: 700px; border: 1px solid #333; float: right; background:#0e1220; }
+</style>
+</head>
+<body>
+<iframe id="frame"></iframe>
+<div id="log"></div>
+<script>
+const log = document.getElementById("log");
+let pass = 0, fail = 0; const failed = [];
+function head(t) { log.innerHTML += `<span class="head">== ${t} ==</span>\n`; }
+function ok(name, cond, extra) {
+  if (cond) { pass++; log.innerHTML += `<span class="ok">  ok   ${name}</span>\n`; }
+  else { fail++; failed.push(name); log.innerHTML += `<span class="fail">  FAIL ${name}${extra ? "  → " + extra : ""}</span>\n`; }
+}
+const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+// ---- trạng thái giả lập, quan sát được từ ngoài ----
+const now = Date.now();
+window.__state = {
+  local: {
+    "pos:https://a.com/bai-1": { block: 2, word: 5, blocks: 20, at: now - 60000,
+      title: "Bài viết A đang đọc dở", url: "https://a.com/bai-1", kind: "web", pct: 42 },
+    "pos:https://b.com/bai-2": { block: 1, word: 0, blocks: 12, at: now - 3600000 * 5,
+      title: "Bài viết B", url: "https://b.com/bai-2", kind: "web", pct: 8 },
+    "pos:chrome-extension://x/viewer/viewer.html#tep.pdf": { block: 0, word: 0, blocks: 5, at: now - 200000,
+      title: "tep.pdf", url: "chrome-extension://x/viewer/viewer.html", kind: "pdf-local", pct: 15 },
+    "pos:https://c.com/xong": { block: 9, word: 0, blocks: 10, at: now - 1000,
+      title: "Bài đã đọc gần xong", url: "https://c.com/xong", kind: "web", pct: 98 },
+    "stats": { days: {}, quizzes: [] }
+  },
+  sync: {},
+  granted: false,          // đã cấp <all_urls> chưa
+  requested: [],           // các lần gọi permissions.request
+  tabsCreated: [],
+  messages: []
+};
+
+fetch("../lamp-reader/popup/popup.html").then(r => r.text()).then(html => {
+  const S = window.__state;
+  const stub = `<script>
+    const S = parent.__state;
+    const pick = (bag, q) => {
+      if (q === null || q === undefined) return { ...bag };
+      if (typeof q === "string") return q in bag ? { [q]: bag[q] } : {};
+      if (Array.isArray(q)) { const o={}; q.forEach(k=>{ if(k in bag) o[k]=bag[k]; }); return o; }
+      const o={}; Object.keys(q).forEach(k=>(o[k]= k in bag ? bag[k] : q[k])); return o;
+    };
+    window.chrome = {
+      runtime: {
+        getURL: p => "chrome-extension://x/" + p,
+        sendMessage: async (m) => { S.messages.push(m); return { ok: S.granted }; }
+      },
+      tabs: {
+        create: async (o) => { S.tabsCreated.push(o.url); return { id: 1 }; },
+        query: async () => [{ id: 1, url: "https://cur.com/x" }]
+      },
+      storage: {
+        sync:  { get: async q => pick(S.sync, q),  set: async o => Object.assign(S.sync, o) },
+        local: {
+          get: async q => pick(S.local, q),
+          set: async o => Object.assign(S.local, o),
+          remove: async k => (Array.isArray(k)?k:[k]).forEach(x => delete S.local[x])
+        }
+      },
+      permissions: {
+        contains: async (p) => S.granted,
+        request: async (p) => { S.requested.push(p); S.granted = true; return true; },
+        remove: async (p) => { S.granted = false; return true; }
+      }
+    };
+    window.close = () => { parent.__state.closed = true; };
+  <\/script>`;
+
+  html = html.replace("<body>", "<body>" + stub)
+             .replace('src="../content/defaults.js"', 'src="../lamp-reader/content/defaults.js"')
+             .replace('src="popup.js"', 'src="../lamp-reader/popup/popup.js"');
+  document.getElementById("frame").srcdoc = html;
+});
+
+document.getElementById("frame").addEventListener("load", async function run() {
+  const S = window.__state;
+  const doc = this.contentDocument;
+  const $ = (id) => doc.getElementById(id);
+  const $$ = (s) => Array.from(doc.querySelectorAll(s));
+  await wait(300);
+
+  head("popup dựng được, phần cũ không hỏng");
+  ok("nút Đọc trang này còn đó", !!$("start"));
+  ok("nút Đọc file PDF còn đó", !!$("openPdf"));
+  ok("bộ chỉnh tốc độ còn đó", $("wpmVal").textContent === "350", $("wpmVal").textContent);
+
+  head("thư viện đang đọc dở");
+  const items = $$(".lib-item");
+  ok("liệt kê đúng 3 bài chưa xong", items.length === 3, `got ${items.length}`);
+  ok("bài >=95% bị loại khỏi danh sách",
+     !items.some(el => el.querySelector(".lib-title").textContent.includes("gần xong")));
+  ok("sắp xếp mới nhất lên đầu",
+     items[0].querySelector(".lib-title").textContent === "Bài viết A đang đọc dở",
+     items[0].querySelector(".lib-title").textContent);
+  ok("hiện phần trăm", items[0].querySelector(".lib-ring").textContent === "42%");
+  ok("hiện thời gian tương đối", /phút trước/.test(items[0].querySelector(".lib-meta").textContent));
+  ok("PDF trên máy được ghi nhãn riêng",
+     items.some(el => /PDF trên máy/.test(el.querySelector(".lib-meta").textContent)));
+  ok("mỗi mục bấm được bằng bàn phím", items.every(el => el.getAttribute("tabindex") === "0"));
+
+  head("xoá một mục");
+  const before = $$(".lib-item").length;
+  const bItem = $$(".lib-item").find(el => el.dataset.url === "https://b.com/bai-2");
+  ok("tìm được bài B trong danh sách", !!bItem);
+  bItem.querySelector(".lib-del").click();
+  await wait(150);
+  ok("mục biến khỏi danh sách", $$(".lib-item").length === before - 1);
+  ok("bản ghi bị xoá khỏi storage", !S.local["pos:https://b.com/bai-2"]);
+  ok("không mở tab khi chỉ bấm nút xoá", S.tabsCreated.length === 0);
+
+  head("mở PDF trên máy: không cần xin quyền");
+  S.tabsCreated.length = 0; S.requested.length = 0;
+  const pdfItem = $$(".lib-item").find(el => el.dataset.kind === "pdf-local");
+  pdfItem.click();
+  await wait(200);
+  ok("mở tab tới viewer", S.tabsCreated.length === 1, JSON.stringify(S.tabsCreated));
+  ok("KHÔNG xin quyền cho trang extension", S.requested.length === 0);
+
+  head("mở bài web: xin quyền rồi mới đọc tiếp");
+  S.tabsCreated.length = 0; S.requested.length = 0; S.messages.length = 0; S.granted = false;
+  $$(".lib-item").find(el => el.dataset.kind === "web").click();
+  await wait(250);
+  ok("có xin quyền", S.requested.length === 1, JSON.stringify(S.requested));
+  ok("chỉ xin đúng origin của bài đó, không xin <all_urls>",
+     S.requested[0].origins[0] === "https://a.com/*", JSON.stringify(S.requested[0]));
+  ok("được cấp thì gửi LAMP_RESUME", S.messages.some(m => m.type === "LAMP_RESUME"));
+  ok("gửi kèm đúng url", S.messages[0].url === "https://a.com/bai-1");
+
+  head("hàng cấp quyền");
+  S.granted = false;
+  $("permBtn").click();
+  await wait(150);
+  ok("bấm Cấp quyền thì xin <all_urls>",
+     S.requested.some(p => p.origins[0] === "<all_urls>"), JSON.stringify(S.requested));
+  ok("nhãn đổi thành Thu hồi", $("permBtn").textContent === "Thu hồi", $("permBtn").textContent);
+  ok("hàng được đánh dấu đã cấp", $("perm").classList.contains("on"));
+  $("permBtn").click();
+  await wait(150);
+  ok("bấm lần nữa thì thu hồi", S.granted === false);
+  ok("nhãn về lại Cấp quyền", $("permBtn").textContent === "Cấp quyền");
+
+  head("xoá hết");
+  $("libClear").click();
+  await wait(200);
+  ok("danh sách rỗng", $$(".lib-item").length === 0);
+  ok("hiện lời nhắc khi rỗng", !!doc.querySelector(".lib-empty"));
+  ok("không xoá nhầm thống kê", !!S.local.stats, "stats bị xoá!");
+  ok("nút Xoá hết tự ẩn", $("libClear").hidden === true);
+
+  log.innerHTML += `\n<span class="${fail ? "fail" : "ok"}">${pass} passed, ${fail} failed</span>\n`;
+  window.__popupTestResult = { pass, fail, failed };
+}, { once: true });
+
+window.addEventListener("error", (e) => {
+  log.innerHTML += `<span class="fail">THROWN: ${e.message}</span>\n`;
+  window.__popupTestResult = { pass, fail: fail + 1, failed: failed.concat("THROWN: " + e.message) };
+});
+window.addEventListener("unhandledrejection", (e) => {
+  log.innerHTML += `<span class="fail">REJECTED: ${e.reason}</span>\n`;
+  window.__popupTestResult = { pass, fail: fail + 1, failed: failed.concat("REJECTED: " + e.reason) };
+});
+</script>
+</body>
+</html>

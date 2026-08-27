@@ -65,6 +65,8 @@ function ok(name, cond, extra) {
   else { fail++; results.push(name); log.innerHTML += `<span class="fail">  FAIL ${name}${extra ? "  → " + extra : ""}</span>\n`; }
 }
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
+const PANELS_CLOSE = () => ["#sheet","#outline","#quiz","#highlights","#train"]
+  .forEach(s => { const el = $(s); if (el) el.hidden = true; });
 const R = () => document.getElementById("lamp-reader-host").shadowRoot;
 const $ = (s) => R().querySelector(s);
 const $$ = (s) => Array.from(R().querySelectorAll(s));
@@ -211,6 +213,119 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   }
   $("#quizClose").click();
   await wait(40);
+
+  head("trích đoạn: lưu bằng phím H, xuất Markdown");
+  // R = đọc lại từ đầu (Home chỉ thanh tiến độ mới xử lý, không phải phím tắt chung)
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+  await wait(60);
+  ok("phím R về đầu bài", $("#pos").textContent.split("/")[0].trim() === "1", $("#pos").textContent);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "h", bubbles: true }));
+  await wait(80);
+  ok("hiện thông báo đã lưu", $("#flash").hidden === false, "flash không hiện");
+  // Ở đầu bài, token 1 nằm trong khối tiêu đề h1 (không có dấu chấm) — trích
+  // đoạn phải dừng ở hết tiêu đề, không nuốt luôn câu đầu của đoạn kế tiếp.
+  {
+    const hlKey = "hl:" + location.href.split("#")[0];
+    await wait(150);
+    const saved = (store.local[hlKey] || [])[0];
+    ok("trích đoạn không dính tiêu đề với đoạn sau",
+       saved && !/Trí tuệ nhân tạo và công việc\s+Trí tuệ/.test(saved.text),
+       saved ? saved.text.slice(0, 80) : "chưa lưu");
+  }
+  ok("thông báo nói đã lưu", /Đã lưu/.test($("#flash").textContent), $("#flash").textContent);
+  // lưu lại đúng câu đó lần nữa -> phải bị chặn trùng
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "h", bubbles: true }));
+  await wait(80);
+  ok("không lưu trùng cùng một câu", /đã có/.test($("#flash").textContent), $("#flash").textContent);
+  // sang câu khác rồi lưu tiếp
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", shiftKey: true, bubbles: true }));
+  await wait(60);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "h", bubbles: true }));
+  await wait(80);
+  ok("lưu được câu thứ hai", /\(2\)/.test($("#flash").textContent), $("#flash").textContent);
+
+  $("#hlBtn").click();
+  await wait(100);
+  ok("bảng trích đoạn mở", $("#highlights").hidden === false);
+  ok("liệt kê 2 trích đoạn", $$(".hl-item").length === 2, `got ${$$(".hl-item").length}`);
+  ok("có nút chép Markdown", !!$("#hlCopy"));
+  ok("có nút tải .md", !!$("#hlDownload"));
+  ok("trích đoạn được lưu vào storage",
+     Array.isArray(store.local["hl:" + location.href.split("#")[0]]),
+     Object.keys(store.local).filter(k => k.startsWith("hl:")).join(","));
+
+  // bấm vào một trích đoạn -> nhảy về đúng token
+  const wantTok = +$$(".hl-text")[1].dataset.token;
+  $$(".hl-text")[1].click();
+  await wait(80);
+  ok("bấm trích đoạn nhảy đúng chỗ",
+     +$("#pos").textContent.split("/")[0].trim() === wantTok + 1,
+     `${$("#pos").textContent} vs ${wantTok + 1}`);
+  ok("bảng tự đóng sau khi nhảy", $("#highlights").hidden === true);
+
+  // xoá một trích đoạn
+  $("#hlBtn").click(); await wait(80);
+  $$(".hl-del")[0].click(); await wait(80);
+  ok("xoá được một trích đoạn", $$(".hl-item").length === 1);
+  $("#hlClear").click(); await wait(80);
+  ok("xoá hết thì hiện lời nhắc", !!$("#hlBody .empty"));
+  $("#hlClose").click(); await wait(60);
+
+  head("theme tự động theo hệ thống");
+  const swAuto = $$("[data-theme]").find(b => b.dataset.theme === "auto");
+  ok("có ô Theo hệ thống", !!swAuto);
+  swAuto.click();
+  await wait(80);
+  const resolved = $(".backdrop").dataset.theme;
+  ok("auto quy về paper hoặc night", resolved === "paper" || resolved === "night", resolved);
+  await wait(500); // chờ debounce ghi xuống storage
+  ok("lưu state là auto chứ không phải bảng màu đã quy đổi", store.sync.theme === "auto", store.sync.theme);
+  $$("[data-theme]").find(b => b.dataset.theme === "sepia").click();
+  await wait(500);
+
+  head("luyện tốc độ: 3 vòng, mỗi vòng một mức WPM");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+  await wait(60);
+  const wpmBefore = +$("#wpmVal").textContent;
+  $("#settingsBtn").click(); await wait(60);
+  ok("có nút bắt đầu luyện", !!$("#trainOpen"));
+  $("#trainOpen").click();
+  await wait(200);
+  ok("vòng 1 chạy ở tốc độ thấp hơn mức đang dùng",
+     +$("#wpmVal").textContent < wpmBefore, `${$("#wpmVal").textContent} vs ${wpmBefore}`);
+  ok("báo đang ở vòng 1", /Vòng 1\/\d/.test($("#flash").textContent), $("#flash").textContent);
+  ok("bảng luyện đóng lại để đọc", $("#train").hidden === true);
+
+  // chờ tự chạy hết vòng 1 -> phải tự dừng và mở quiz
+  await wait(1100);
+  ok("vòng 1 tự chạy", $("#playIcon").innerHTML.includes("M7 5h3.4"), "chưa chạy");
+  // tua thẳng tới cuối vòng cho nhanh thay vì đợi đọc thật
+  for (let i = 0; i < 20; i++) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  }
+  await wait(1500);
+  ok("hết vòng thì mở bảng kiểm tra", $("#quiz").hidden === false, "quiz chưa mở");
+  ok("quiz ghi rõ đang ở vòng nào", !!$(".quiz-round"), "thiếu nhãn vòng");
+  const qn = $$(".quiz-q").length;
+  ok("vòng luyện hỏi ít câu hơn quiz thường", qn > 0 && qn <= 3, `got ${qn}`);
+  if (qn) {
+    $$(".quiz-q").forEach(c => c.querySelector(".quiz-opt").click());
+    await wait(60);
+    $("#quizSubmit").click();
+    await wait(120);
+    ok("chấm xong có nút sang vòng tiếp", !!$("#quizNext"));
+    $("#quizNext").click();
+    await wait(300);
+    ok("vòng 2 đổi sang tốc độ khác", /Vòng 2\/\d/.test($("#flash").textContent), $("#flash").textContent);
+  }
+  // thoát buổi luyện, tốc độ phải trở về như cũ
+  $("#trainClose") && $("#trainClose").click();
+  $("#settingsBtn").click(); await wait(60);
+  $("#trainClose").click();
+  await wait(150);
+  ok("đóng buổi luyện thì trả lại tốc độ ban đầu",
+     +$("#wpmVal").textContent === wpmBefore, `${$("#wpmVal").textContent} vs ${wpmBefore}`);
+  PANELS_CLOSE();
 
   head("gộp lượt ghi storage (hạn mức sync là 120/phút)");
   const before = window.__writes.sync;

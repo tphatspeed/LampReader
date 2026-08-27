@@ -25,8 +25,25 @@
     custom: { label: "Tuỳ chỉnh", stack: "" }
   };
 
-  const THEMES = ["paper", "sepia", "gray", "night", "contrast"];
-  const THEME_LABEL = { paper: "Giấy", sepia: "Sepia", gray: "Xám", night: "Đêm", contrast: "Tương phản cao" };
+  // "auto" không phải một bảng màu riêng — nó bám theo cài đặt sáng/tối của
+  // hệ điều hành và quy về Giấy hoặc Đêm. Giữ nguyên state.theme === "auto"
+  // để lần sau mở vẫn tiếp tục tự đổi, chỉ phần hiển thị mới quy đổi.
+  // Moi bang truot len tu day. Gom ve mot cho de them bang moi khong phai
+  // nho sua 4 noi roi rac (dung kieu lech danh sach da tung gay loi truoc day).
+  const PANELS = ["#sheet", "#outline", "#quiz", "#highlights", "#train"];
+
+  const THEMES = ["auto", "paper", "sepia", "gray", "night", "contrast"];
+  const THEME_LABEL = {
+    auto: "Theo hệ thống", paper: "Giấy", sepia: "Sepia",
+    gray: "Xám", night: "Đêm", contrast: "Tương phản cao"
+  };
+  const darkQuery = () =>
+    (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)")) || null;
+  function resolveTheme(t) {
+    if (t !== "auto") return t;
+    const q = darkQuery();
+    return q && q.matches ? "night" : "paper";
+  }
 
   const REST_INTERVAL = 20 * 60 * 1000; // quy tắc 20-20-20
   const REST_SECONDS = 20;
@@ -44,6 +61,9 @@
     root: null,
     open: false,
     docKey: null,
+    docUrl: "",
+    docTitle: "",
+    docKind: "web",   // web | pdf-url | pdf-local — quyết định cách mở lại từ thư viện
     prevOverflow: "",
     prevFocus: null,
     // thống kê phiên
@@ -57,7 +77,9 @@
     utter: null,
     ttsOffsets: null,
     ttsFallback: null,
-    quiz: null
+    quiz: null,
+    highlights: [],
+    training: null
   };
 
   const $ = (s) => state.root.querySelector(s);
@@ -146,14 +168,16 @@
       x: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
       list: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
       prev: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 19L3 12l8-7M21 19l-8-7 8-7"/></svg>',
-      next: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l8 7-8 7M3 5l8 7-8 7"/></svg>'
+      next: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5l8 7-8 7M3 5l8 7-8 7"/></svg>',
+      mark: '<svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/></svg>'
     };
 
     return `
-      <div class="backdrop" data-theme="${state.theme}" tabindex="-1">
+      <div class="backdrop" data-theme="${resolveTheme(state.theme)}" tabindex="-1">
 
         <div class="topbar">
           <div class="doc-title" id="docTitle"></div>
+          <button class="round" id="hlBtn" title="Trích đoạn đã lưu (H để lưu câu)" aria-label="Trích đoạn đã lưu">${icon.mark}</button>
           <button class="round" id="outlineBtn" title="Dàn bài (O)" aria-label="Dàn bài">${icon.list}</button>
           <button class="round" id="settingsBtn" title="Cài đặt (S)" aria-label="Cài đặt">${icon.gear}</button>
           <button class="round" id="closeBtn" title="Đóng (Esc)" aria-label="Đóng">${icon.x}</button>
@@ -170,6 +194,7 @@
           </div>
           <div class="guide-view" id="guideView" hidden></div>
           <div class="focus-view" id="focusView" hidden></div>
+          <div class="flash" id="flash" hidden></div>
           <div class="ready" id="ready">Nhấn <kbd>Space</kbd> để bắt đầu</div>
         </div>
 
@@ -244,6 +269,11 @@
               ${toggle("restReminder", "Nhắc nghỉ mắt", "Cứ 20 phút nhắc nhìn xa 20 giây")}
             </div>
             <div class="group">
+              <div class="group-label">Luyện tốc độ</div>
+              <button class="primary" id="trainOpen" style="margin-top:0">Bắt đầu buổi luyện</button>
+              <small class="hint">Đọc bài này ở 3 mức tốc độ tăng dần, mỗi mức kiểm tra hiểu ngay. Kết thúc sẽ chỉ ra mức WPM phù hợp nhất với bạn.</small>
+            </div>
+            <div class="group">
               <div class="group-label">Thống kê</div>
               <div id="stats" class="stats"></div>
             </div>
@@ -253,6 +283,20 @@
               <div><kbd>↑</kbd><kbd>↓</kbd> tốc độ · <kbd>M</kbd> đổi chế độ · <kbd>O</kbd> dàn bài · <kbd>Q</kbd> kiểm tra · <kbd>S</kbd> cài đặt</div>
             </div>
           </div>
+        </div>
+
+        <!-- Trích đoạn đã lưu -->
+        <div class="sheet" id="highlights" hidden>
+          <div class="sheet-head"><b>Trích đoạn đã lưu</b>
+            <button class="round sm" id="hlClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-body"><div id="hlBody"></div></div>
+        </div>
+
+        <!-- Luyện tốc độ -->
+        <div class="sheet wide" id="train" hidden>
+          <div class="sheet-head"><b>Luyện tốc độ</b>
+            <button class="round sm" id="trainClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-body"><div id="trainBody"></div></div>
         </div>
 
         <!-- Kiểm tra hiểu -->
@@ -330,6 +374,10 @@
     $("#closeBtn").addEventListener("click", close);
     $("#settingsBtn").addEventListener("click", () => panel("#sheet"));
     $("#outlineBtn").addEventListener("click", () => panel("#outline"));
+    $("#hlBtn").addEventListener("click", () => panel("#highlights"));
+    $("#hlClose").addEventListener("click", () => panel("#highlights", false));
+    $("#trainClose").addEventListener("click", () => { stopTraining(); panel("#train", false); });
+    $("#trainOpen").addEventListener("click", () => startTraining());
     $("#sheetClose").addEventListener("click", () => panel("#sheet", false));
     $("#outlineClose").addEventListener("click", () => panel("#outline", false));
     $("#quizClose").addEventListener("click", () => panel("#quiz", false));
@@ -437,9 +485,18 @@
 
     $("#restSkip").addEventListener("click", endRest);
 
-    ["#sheet", "#outline", "#quiz"].forEach((s) => makeDraggable($(s)));
+    PANELS.forEach((s) => makeDraggable($(s)));
 
     document.addEventListener("keydown", onKey, true);
+
+    // Hệ thống đổi sáng/tối giữa chừng thì overlay đổi theo ngay, không cần
+    // mở lại. Chỉ có tác dụng khi người dùng đang chọn "Theo hệ thống".
+    const q = darkQuery();
+    if (q) {
+      const onScheme = () => { if (state.theme === "auto") applyStyle(); };
+      q.addEventListener ? q.addEventListener("change", onScheme) : q.addListener(onScheme);
+    }
+
     // Đóng tab hay chuyển sang tab khác: ghi ngay phần đang chờ, kẻo mất
     // tiến trình đọc vừa rồi. pagehide đáng tin hơn unload trên Chrome.
     window.addEventListener("pagehide", flushWrites);
@@ -504,7 +561,7 @@
 
     if (k === "Escape") {
       stop();
-      const openPanel = ["#sheet", "#outline", "#quiz"].find((s) => !$(s).hidden);
+      const openPanel = PANELS.find((s) => !$(s).hidden);
       openPanel ? panel(openPanel, false) : close();
     } else if (k === " " || k === "Spacebar") { stop(); togglePlay(); }
     else if (k === "ArrowLeft") {
@@ -517,6 +574,7 @@
     else if (k === "-" || k === "_") { stop(); bump("size", -1); }
     else if (k === "s" || k === "S") { stop(); panel("#sheet"); }
     else if (k === "o" || k === "O") { stop(); panel("#outline"); }
+    else if (k === "h" || k === "H") { stop(); addHighlight(); }
     else if (k === "q" || k === "Q") { stop(); openQuiz(); }
     else if (k === "m" || k === "M") { stop(); setMode(state.mode === "rsvp" ? "guide" : "rsvp"); }
     else if (k === "r" || k === "R") { stop(); jumpTo(0); }
@@ -525,13 +583,14 @@
   function panel(sel, force) {
     const el = $(sel);
     const show = force === undefined ? el.hidden : force;
-    ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
+    PANELS.forEach((s) => ($(s).hidden = true));
     el.hidden = !show;
     if (show) {
       resetPanelPos(el);
       pause();
       if (sel === "#sheet") renderStats();
       if (sel === "#outline") markOutlineCurrent();
+      if (sel === "#highlights") renderHighlights();
     }
   }
 
@@ -672,7 +731,7 @@
 
   function applyStyle() {
     const bd = $(".backdrop");
-    bd.dataset.theme = state.theme;
+    bd.dataset.theme = resolveTheme(state.theme);
     bd.dataset.orp = state.orp ? "on" : "off";
     bd.dataset.ruler = state.ruler ? "on" : "off";
     const stack = state.fontFamily === "custom"
@@ -770,6 +829,12 @@
     accrue();
     if (state.idx >= state.tokens.length - 1) { finish(); return; }
     state.idx++;
+    // Đang luyện: đọc hết khoảng của vòng thì dừng lại để kiểm tra hiểu
+    if (state.training && state.training.active && state.idx >= currentRound().to) {
+      render();
+      endRound();
+      return;
+    }
     render();
     if (state.idx % 25 === 0) saveProgress();
     schedule();
@@ -822,6 +887,9 @@
     render();
     if (state.playing) { if (state.tts) { stopSpeech(); startSpeech(); } else schedule(); }
     saveProgress();
+    // Tua tay vượt qua cuối vòng luyện cũng tính là xong vòng — nếu chỉ bắt
+    // trong tick() thì kéo thanh tiến độ sẽ làm buổi luyện kẹt vĩnh viễn.
+    if (state.training && state.training.active && state.idx >= currentRound().to) endRound();
   }
   const skip = (n) => jumpTo(state.idx + n);
 
@@ -951,6 +1019,136 @@
     btns.forEach((b, i) => b.classList.toggle("current", i === cur));
   }
 
+  // ============================ LUYỆN TỐC ĐỘ ============================
+  // Đọc cùng một bài ở nhiều mức tốc độ, mỗi mức kiểm tra hiểu ngay sau đó.
+  // Mục đích: tìm ngưỡng WPM của riêng người dùng bằng số liệu thay vì cảm
+  // giác — đây là thứ mà app đã có đủ hạ tầng (quiz + thống kê) để làm.
+
+  const ROUND_QUESTIONS = 3;
+  const MIN_ROUND = 45;   // ít hơn thì không đủ chữ để sinh câu hỏi có nghĩa
+  const MAX_ROUND = 200;  // nhiều hơn thì mỗi vòng đọc quá lâu, nản
+
+  function planRounds() {
+    const base = clampRange(state.wpm, LIMIT.wpm);
+    // Ba mức: chậm hơn một bậc, mức hiện tại, nhanh hơn một bậc
+    const speeds = [base - 100, base, base + 100].map((w) => clampRange(w, LIMIT.wpm));
+
+    // Chia phần CÒN LẠI của bài cho ba mức thay vì cắt cứng 140 cụm mỗi vòng.
+    // Cắt cứng thì bài ngắn chỉ xếp nổi một vòng và buổi luyện thành vô nghĩa,
+    // còn bài dài thì ba vòng đầu chỉ chạm được một góc nhỏ của bài.
+    const remaining = state.tokens.length - 1 - state.idx;
+    if (remaining < MIN_ROUND * 2) return [];
+    const size = Math.max(MIN_ROUND, Math.min(MAX_ROUND, Math.floor(remaining / speeds.length)));
+
+    const rounds = [];
+    let from = state.idx;
+    for (const wpm of speeds) {
+      const to = Math.min(from + size, state.tokens.length - 1);
+      if (to - from < MIN_ROUND) break;
+      rounds.push({ wpm, from, to, score: null, total: null });
+      from = to;
+    }
+    return rounds;
+  }
+
+  const currentRound = () => state.training.rounds[state.training.i];
+
+  function startTraining() {
+    const rounds = planRounds();
+    if (rounds.length < 2) {
+      state.training = null;
+      $("#trainBody").innerHTML =
+        '<div class="empty">Phần còn lại của bài quá ngắn để luyện. Hãy quay về đầu bài (phím <b>R</b>) rồi thử lại.</div>';
+      panel("#train", true);
+      return;
+    }
+    state.training = { active: true, rounds, i: 0, savedWpm: state.wpm };
+    beginRound();
+  }
+
+  function stopTraining() {
+    if (!state.training) return;
+    if (state.training.savedWpm) {
+      state.wpm = state.training.savedWpm;
+      applyStyle(); syncControls(); render(); save();
+    }
+    state.training = null;
+  }
+
+  function beginRound() {
+    const r = currentRound();
+    state.wpm = r.wpm;
+    state.idx = clamp(r.from);
+    syncControls();
+    render();
+    panel("#train", false);
+    flash("Vòng " + (state.training.i + 1) + "/" + state.training.rounds.length +
+          " — " + r.wpm + " WPM");
+    // Cho một nhịp để đọc thông báo rồi mới chạy
+    setTimeout(() => { if (state.training && state.training.active) play(); }, 900);
+  }
+
+  function endRound() {
+    pause();
+    const r = currentRound();
+    openQuiz({
+      from: r.from,
+      count: ROUND_QUESTIONS,
+      title: "Vòng " + (state.training.i + 1) + " · " + r.wpm + " WPM",
+      onGraded: (score, total) => {
+        r.score = score; r.total = total;
+        state.training.i++;
+        if (state.training.i < state.training.rounds.length) {
+          beginRound();
+        } else {
+          state.training.active = false;
+          renderTrainingSummary();
+          panel("#train", true);
+        }
+      }
+    });
+  }
+
+  function renderTrainingSummary() {
+    const rounds = state.training.rounds.filter((r) => r.total);
+    const pctOf = (r) => Math.round((r.score / r.total) * 100);
+    // Mức nhanh nhất mà vẫn còn hiểu tốt (>=80%) là ngưỡng nên dùng
+    const good = rounds.filter((r) => pctOf(r) >= 80);
+    const best = good.length ? good[good.length - 1] : null;
+
+    const rows = rounds.map((r) => {
+      const pct = pctOf(r);
+      return '<div class="stat-row">' +
+        '<span>' + r.wpm + ' WPM</span>' +
+        '<span class="bar"><i style="width:' + pct + '%"></i></span>' +
+        '<span class="pct">' + r.score + '/' + r.total + '</span>' +
+        '</div>';
+    }).join("");
+
+    const advice = best
+      ? 'Ở <b>' + best.wpm + ' WPM</b> bạn vẫn hiểu tốt (' + pctOf(best) + '%). Đây là tốc độ nên dùng cho loại nội dung này.'
+      : 'Chưa mức nào đạt 80%. Hãy thử lại từ <b>' + clampRange(rounds[0].wpm - 100, LIMIT.wpm) +
+        ' WPM</b> — hoặc dùng chế độ Dẫn dòng cho bài khó như thế này.';
+
+    $("#trainBody").innerHTML =
+      '<p class="quiz-intro">Kết quả buổi luyện trên chính bài đang đọc.</p>' + rows +
+      '<div class="quiz-result" style="margin-top:16px"><span>' + advice + '</span></div>' +
+      '<div class="hl-actions">' +
+      (best ? '<button class="quiz-review" id="trainApply">Dùng ' + best.wpm + ' WPM</button>' : '') +
+      '<button class="quiz-review" id="trainAgain">Luyện tiếp phần sau</button>' +
+      '</div>';
+
+    const apply = $("#trainApply");
+    if (apply) apply.addEventListener("click", () => {
+      state.wpm = best.wpm;
+      state.training = null;   // đừng để stopTraining() khôi phục tốc độ cũ
+      applyStyle(); syncControls(); render(); save();
+      panel("#train", false);
+      flash("Đã đặt " + best.wpm + " WPM");
+    });
+    $("#trainAgain").addEventListener("click", () => { stopTraining(); startTraining(); });
+  }
+
   // ============================ KIỂM TRA HIỂU ============================
 
   // Đọc càng nhiều thì hỏi càng nhiều, trong khoảng 3–8 câu — bài ngắn 5 câu
@@ -966,17 +1164,25 @@
     return i < 0 ? s : s.slice(0, i) + "<mark>" + a + "</mark>" + s.slice(i + a.length);
   }
 
-  function openQuiz() {
-    const qs = E.buildQuiz(state.tokens, state.idx, quizCount(), state.vietnamese);
+  // opts: { from, count, title, onGraded } — dùng cho chế độ luyện (hỏi riêng
+  // một vòng). Gọi openQuiz() không tham số vẫn giữ nguyên hành vi phím Q.
+  function openQuiz(opts) {
+    const o = opts || {};
+    const from = o.from || 0;
+    const qs = E.buildQuiz(state.tokens, state.idx, o.count || quizCount(), state.vietnamese, from);
     const body = $("#quizBody");
     if (!qs.length) {
       body.innerHTML = '<div class="empty">Chưa đọc đủ nội dung để tạo câu hỏi. Đọc thêm rồi thử lại.</div>';
       panel("#quiz", true);
+      // Đang luyện mà đoạn này không sinh được câu hỏi thì bỏ qua vòng, đừng
+      // để buổi luyện kẹt cứng ở đây.
+      if (o.onGraded) setTimeout(() => o.onGraded(0, 0), 50);
       return;
     }
-    state.quiz = { questions: qs, answers: {} };
+    state.quiz = { questions: qs, answers: {}, onGraded: o.onGraded };
 
     body.innerHTML = `
+      ${o.title ? `<div class="quiz-round">${esc(o.title)}</div>` : ""}
       <p class="quiz-intro">Điền từ còn thiếu. Đây là cách tự kiểm tra xem bạn thật sự hiểu hay chỉ đang nhìn chữ chạy.</p>
       ${qs.map((q, i) => `
         <div class="quiz-q" data-q="${q.id}">
@@ -1055,6 +1261,159 @@
     $("#quizSubmit").disabled = true;
 
     recordQuiz(score, questions.length);
+
+    // Chế độ luyện: báo điểm về để chuyển sang vòng kế tiếp
+    const cb = state.quiz.onGraded;
+    if (cb) {
+      const next = $("#quizNext");
+      if (next) next.remove();
+      const btn = document.createElement("button");
+      btn.className = "primary";
+      btn.id = "quizNext";
+      btn.textContent = "Vòng tiếp theo →";
+      btn.addEventListener("click", () => { panel("#quiz", false); cb(score, questions.length); });
+      $("#quizBody").appendChild(btn);
+    }
+  }
+
+  // ============================ TRÍCH ĐOẠN ĐÃ LƯU ============================
+  // RSVP đọc xong là chữ trôi mất; muốn giữ lại một câu thì phải chép tay.
+  // Phím H lưu nguyên câu đang đọc vào danh sách của tài liệu, xuất được ra
+  // Markdown để dán vào ghi chú. Lưu ở storage.local, không gửi đi đâu.
+
+  function currentSentence() {
+    if (!state.tokens.length) return null;
+    const cur = state.tokens[state.idx];
+    if (!cur) return null;
+    const sameBlock = (i) => !!state.tokens[i] && state.tokens[i].block === cur.block;
+
+    // Tự quét tới token kết câu thay vì dùng sentenceNext: hàm đó bị kẹp ở
+    // tokens.length - 1 nên với câu CUỐI bài nó trả về đúng token kết câu,
+    // khiến slice() cắt mất chính từ cuối cùng của câu.
+    //
+    // Đồng thời không cho câu vắt qua ranh giới khối: tiêu đề không có dấu
+    // chấm, nên nếu không chặn thì trích đoạn sẽ dính nguyên tiêu đề vào câu
+    // đầu của đoạn ngay sau nó.
+    let from = E.sentenceStart(state.tokens, state.idx);
+    while (from < state.idx && !sameBlock(from)) from++;
+
+    let to = from;
+    while (to < state.tokens.length && sameBlock(to) &&
+           !E.CLAUSE_END.test(state.tokens[to].text)) to++;
+    const end = sameBlock(to) ? Math.min(to + 1, state.tokens.length) : to;
+
+    const text = state.tokens.slice(from, end).map((t) => t.text).join(" ").trim();
+    return text ? { text, token: from } : null;
+  }
+
+  const hlKey = () => "hl:" + state.docKey;
+
+  async function loadHighlights() {
+    state.highlights = [];
+    if (!state.docKey) return;
+    try {
+      const d = await chrome.storage.local.get(hlKey());
+      state.highlights = d[hlKey()] || [];
+    } catch (e) {}
+  }
+
+  function persistHighlights() {
+    if (!state.docKey) return;
+    quiet(chrome.storage.local.set({ [hlKey()]: state.highlights }));
+  }
+
+  function addHighlight() {
+    const cur = currentSentence();
+    if (!cur) return;
+    if (state.highlights.some((h) => h.text === cur.text)) {
+      flash("Câu này đã có trong danh sách");
+      return;
+    }
+    state.highlights.push({ text: cur.text, token: cur.token, at: Date.now() });
+    persistHighlights();
+    flash("Đã lưu trích đoạn (" + state.highlights.length + ")");
+  }
+
+  // Báo ngắn gọn ngay trên vùng chữ — bấm H mà không thấy phản hồi gì thì
+  // không biết đã lưu được hay chưa.
+  let flashTimer = null;
+  function flash(msg) {
+    const el = $("#flash");
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { el.hidden = true; }, 1800);
+  }
+
+  function highlightsMarkdown() {
+    const head = "# " + (state.docTitle || "Trích đoạn") + "\n\n" +
+      (state.docUrl ? state.docUrl + "\n\n" : "");
+    return head + state.highlights.map((h) => "> " + h.text).join("\n\n") + "\n";
+  }
+
+  function safeFileName(name) {
+    return String(name || "trich-doan").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+  }
+
+  function renderHighlights() {
+    const body = $("#hlBody");
+    if (!state.highlights.length) {
+      body.innerHTML = '<div class="empty">Chưa lưu trích đoạn nào. Đang đọc, bấm <b>H</b> để lưu lại câu hiện tại.</div>';
+      return;
+    }
+    body.innerHTML =
+      '<p class="quiz-intro">' + state.highlights.length +
+      ' trích đoạn từ bài này. Bấm vào một câu để nhảy về đúng chỗ đó.</p>' +
+      '<div class="hl-list">' +
+      state.highlights.map(function (h, i) {
+        return '<div class="hl-item">' +
+          '<button class="hl-text" data-token="' + h.token + '">' + esc(h.text) + '</button>' +
+          '<button class="hl-del" data-i="' + i + '" title="Xoá" aria-label="Xoá">×</button>' +
+          '</div>';
+      }).join("") +
+      '</div>' +
+      '<div class="hl-actions">' +
+      '<button class="quiz-review" id="hlCopy">Chép dạng Markdown</button>' +
+      '<button class="quiz-review" id="hlDownload">Tải file .md</button>' +
+      '<button class="quiz-review" id="hlClear">Xoá hết</button>' +
+      '</div>';
+
+    body.querySelectorAll(".hl-text").forEach(function (b) {
+      b.addEventListener("click", function () {
+        jumpTo(parseInt(b.dataset.token, 10));
+        panel("#highlights", false);
+      });
+    });
+    body.querySelectorAll(".hl-del").forEach(function (b) {
+      b.addEventListener("click", function () {
+        state.highlights.splice(parseInt(b.dataset.i, 10), 1);
+        persistHighlights();
+        renderHighlights();
+      });
+    });
+    body.querySelector("#hlCopy").addEventListener("click", async function () {
+      try {
+        await navigator.clipboard.writeText(highlightsMarkdown());
+        flash("Đã chép vào clipboard");
+      } catch (e) {
+        flash("Trang này không cho chép — hãy dùng Tải file");
+      }
+    });
+    body.querySelector("#hlDownload").addEventListener("click", function () {
+      // Blob + <a download>: không cần quyền "downloads", chạy ngay trong trang
+      const blob = new Blob([highlightsMarkdown()], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeFileName(state.docTitle) + ".md";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+    body.querySelector("#hlClear").addEventListener("click", function () {
+      state.highlights = [];
+      persistHighlights();
+      renderHighlights();
+    });
   }
 
   // ============================ THỐNG KÊ ============================
@@ -1159,11 +1518,34 @@
     if (!state.docKey) return;
     const t = state.tokens[state.idx];
     if (!t) return;
+    const total = Math.max(1, state.tokens.length);
     quiet(chrome.storage.local.set({
       ["pos:" + state.docKey]: {
-        block: t.block, word: t.from, blocks: state.blocks.length, at: Date.now()
+        block: t.block, word: t.from, blocks: state.blocks.length, at: Date.now(),
+        // Ba trường dưới chỉ để popup dựng danh sách "đang đọc dở" — phần
+        // khôi phục vị trí vẫn chỉ dựa vào block/word ở trên.
+        title: state.docTitle, url: state.docUrl, kind: state.docKind,
+        pct: Math.round(((state.idx + 1) / total) * 100)
       }
     }));
+    pruneProgress();
+  }
+
+  // Giữ 60 tài liệu gần nhất. Không dọn thì mỗi trang từng đọc để lại một bản
+  // ghi vĩnh viễn, vài tháng là danh sách thư viện dài vô dụng.
+  let pruning = false;
+  async function pruneProgress() {
+    if (pruning) return;
+    pruning = true;
+    try {
+      const all = await chrome.storage.local.get(null);
+      const keys = Object.keys(all).filter((k) => k.startsWith("pos:"));
+      if (keys.length > 60) {
+        keys.sort((a, b) => (all[b].at || 0) - (all[a].at || 0));
+        await chrome.storage.local.remove(keys.slice(60));
+      }
+    } catch (e) { /* hết chỗ hoặc bị chặn — bỏ qua, không ảnh hưởng việc đọc */ }
+    pruning = false;
   }
   const saveProgress = debounce(writeProgress, 500);
 
@@ -1215,6 +1597,10 @@
     // một khoá tiến trình — thêm tên tài liệu vào khoá để tách chúng ra.
     state.docKey = ((location.href.split("#")[0] || "") +
       (ex.source === "pdf" ? "#" + (ex.title || "") : "")).slice(0, 300);
+    state.docUrl = location.href.split("#")[0] || "";
+    state.docTitle = (ex.title || state.docUrl || "Không tên").slice(0, 200);
+    state.docKind = ex.source !== "pdf" ? "web"
+      : (/[?&]file=/.test(location.search) ? "pdf-url" : "pdf-local");
     state.playing = false;
     state.started = false;
     state.activeMs = 0;
@@ -1225,12 +1611,13 @@
     if (!state.host) await buildOverlay();
     state.host.style.display = "block";
     state.open = true;
-    ["#sheet", "#outline", "#quiz"].forEach((s) => ($(s).hidden = true));
+    PANELS.forEach((s) => ($(s).hidden = true));
     $("#rest").hidden = true;
     $("#focusView").hidden = true;
     // Tài liệu mới → bỏ HTML đã dựng của tài liệu cũ
     clearPaintCache();
 
+    await loadHighlights();
     state.idx = await loadProgress();
     state.creditedIdx = state.idx; // chỉ tính phần đọc thêm từ đây trở đi
     if (state.idx > 0) state.started = true;

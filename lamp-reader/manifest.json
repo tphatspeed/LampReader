@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Lamp — Đọc nhanh RSVP",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "Đọc nhanh bất kỳ trang web hoặc file PDF nào bằng kỹ thuật RSVP. Nhấn Alt+R để bắt đầu.",
   "permissions": [
     "activeTab",
@@ -9,7 +9,7 @@
     "storage",
     "contextMenus"
   ],
-  "host_permissions": [
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "background": {

@@ -69,9 +69,43 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === MENU_ID && tab) launchReader(tab.id, tab.url, true);
 });
 
+// Mở lại một tài liệu từ thư viện: tạo tab, chờ tải xong rồi mới tiêm script.
+// Tab mới KHÔNG được activeTab bảo trợ (cử chỉ của người dùng thuộc về tab cũ),
+// nên bước này chỉ chạy được khi đã cấp quyền cho trang đó — popup lo phần xin
+// quyền trước khi gửi thông điệp này xuống.
+function resumeReading(url) {
+  return new Promise(async (resolve) => {
+    let tab;
+    try {
+      tab = await chrome.tabs.create({ url });
+    } catch (err) {
+      resolve({ ok: false, reason: err.message });
+      return;
+    }
+    let done = false;
+    const finish = (res) => {
+      if (done) return;
+      done = true;
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      resolve(res);
+    };
+    const onUpdated = (tabId, info) => {
+      if (tabId !== tab.id || info.status !== "complete") return;
+      launchReader(tab.id, url).then(finish);
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    // Trang không bao giờ báo "complete" (tải mãi, bị chặn…) thì cũng phải nhả
+    setTimeout(() => finish({ ok: false, reason: "timeout" }), 20000);
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "LAMP_LAUNCH") {
-    launchReader(msg.tabId, msg.url).then(sendResponse);
+    launchReader(msg.tabId, msg.url, msg.forceSelection).then(sendResponse);
     return true; // giữ kênh mở cho phản hồi bất đồng bộ
+  }
+  if (msg.type === "LAMP_RESUME") {
+    resumeReading(msg.url).then(sendResponse);
+    return true;
   }
 });

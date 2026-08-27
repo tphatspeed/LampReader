@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><title>Lamp — kiểm thử EPUB</title>
+<style>
+ body{font:14px/1.6 -apple-system,system-ui,sans-serif;margin:20px;background:#111;color:#ddd}
+ #log{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ .ok{color:#6bd06b}.fail{color:#ff6b6b;font-weight:700}.head{color:#f2a93b;margin-top:10px;display:block}
+</style></head><body>
+<div id="log"></div>
+<script src="../lamp-reader/content/epub.js"></script>
+<script src="../lamp-reader/content/engine.js"></script>
+<script>
+const log=document.getElementById("log");let pass=0,fail=0;const failed=[];
+function head(t){log.innerHTML+=`<span class="head">== ${t} ==</span>\n`}
+function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</span>\n`}
+ else{fail++;failed.push(n);log.innerHTML+=`<span class="fail">  FAIL ${n}${e?"  → "+e:""}</span>\n`}}
+
+(async function run(){
+  head("đọc file EPUB thật (ZIP + deflate, tự giải nén)");
+  ok("trình duyệt có DecompressionStream deflate-raw", typeof DecompressionStream === "function");
+
+  const buf = await (await fetch("fixtures/sach-mau.epub")).arrayBuffer();
+  ok("tải được file mẫu", buf.byteLength > 500, buf.byteLength + " byte");
+
+  const progress = [];
+  const res = await window.__lampEpub.parse(buf, (i,n)=>progress.push(i+"/"+n));
+
+  ok("lấy đúng tên sách từ dc:title", res.title === "Đọc nhanh và trí nhớ", res.title);
+  ok("đọc đúng 2 chương theo spine", res.chapters === 2, String(res.chapters));
+  ok("có báo tiến độ từng chương", progress.length === 2, progress.join(","));
+  ok("bóc được nhiều khối", res.blocks.length >= 10, String(res.blocks.length));
+
+  head("khối đúng định dạng engine.js cần");
+  ok("mọi khối đều có type", res.blocks.every(b => b.type === "h" || b.type === "p" || b.type === "li"));
+  ok("mọi khối đều có text", res.blocks.every(b => typeof b.text === "string" && b.text.length > 1));
+  const heads = res.blocks.filter(b => b.type === "h");
+  ok("nhận ra tiêu đề chương", heads.length >= 3, JSON.stringify(heads.map(h=>h.text)));
+  ok("tiêu đề có level", heads.every(h => h.level >= 1 && h.level <= 6));
+  ok("h1 và h2 có level khác nhau", new Set(heads.map(h=>h.level)).size >= 2);
+  ok("nhận ra mục danh sách", res.blocks.some(b => b.type === "li"));
+
+  head("giữ đúng thứ tự và nội dung");
+  const texts = res.blocks.map(b=>b.text);
+  ok("chương 1 đứng trước chương 2",
+     texts.findIndex(t=>t.includes("Chương một")) < texts.findIndex(t=>t.includes("Chương hai")));
+  ok("đọc được chương nằm trong thư mục con (text/ch2)",
+     texts.some(t=>t.includes("Chương hai")), "không thấy chương 2");
+  ok("lấy được blockquote", texts.some(t=>t.includes("thích nghi với thị trường")));
+  ok("lấy được đoạn lồng trong div", texts.some(t=>t.includes("Khối lồng trong div")));
+
+  head("bỏ đúng thứ cần bỏ");
+  ok("không lẫn CSS", !texts.some(t=>/margin:0|color:red/.test(t)), texts.filter(t=>/margin|color:/.test(t)).join("|"));
+  ok("không lẫn JavaScript", !texts.some(t=>/var x=1/.test(t)));
+  ok("không có khối trùng nhau", new Set(texts).size === texts.length,
+     `${texts.length} khối, ${new Set(texts).size} khác nhau`);
+
+  head("nối được vào engine");
+  const E = window.__lampEngine;
+  if (E) {
+    const toks = E.buildTokens(res.blocks, 1);
+    ok("tách được token", toks.length > 80, String(toks.length));
+    ok("dàn bài dựng được từ EPUB", E.buildOutline(res.blocks, toks).length >= 3);
+    ok("nhận ra là tiếng Việt", E.detectVietnamese(res.blocks.map(b=>b.text).join(" ")));
+  } else ok("engine.js nạp được", false, "thiếu engine");
+
+  head("file hỏng thì báo lỗi tử tế, không văng");
+  try {
+    await window.__lampEpub.parse(new Uint8Array([1,2,3,4,5,6,7,8]).buffer);
+    ok("từ chối file không phải ZIP", false, "không ném lỗi");
+  } catch (e) { ok("từ chối file không phải ZIP", /ZIP|EOCD/.test(e.message), e.message); }
+
+  try {
+    // ZIP hợp lệ nhưng không phải EPUB
+    const z = await (await fetch("fixtures/khong-phai-epub.zip")).arrayBuffer();
+    await window.__lampEpub.parse(z);
+    ok("từ chối ZIP không phải EPUB", false, "không ném lỗi");
+  } catch (e) { ok("từ chối ZIP không phải EPUB", /container\.xml|EPUB/.test(e.message), e.message); }
+
+  log.innerHTML += `\n<span class="${fail?"fail":"ok"}">${pass} passed, ${fail} failed</span>\n`;
+  window.__epubTestResult={pass,fail,failed};
+})().catch(e=>{
+  log.innerHTML+=`<span class="fail">THROWN: ${e && e.stack || e}</span>\n`;
+  window.__epubTestResult={pass,fail:fail+1,failed:failed.concat("THROWN: "+e)};
+});
+</script>
+</body></html>

@@ -105,6 +105,54 @@
     line-height: 1.65;
   }
   .foot b { color: #8c8fa3; font-weight: 600; }
+
+  /* ---- Thư viện: đang đọc dở ---- */
+  .sec-label {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: #6f7286; margin: 16px 0 8px;
+  }
+  .sec-label button {
+    border: none; background: none; color: #6f7286; cursor: pointer;
+    font-size: 10.5px; letter-spacing: .06em; text-transform: none; padding: 0;
+  }
+  .sec-label button:hover { color: #e06b6b; }
+  .lib { display: flex; flex-direction: column; gap: 4px; }
+  .lib-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 9px 10px; border: 1px solid #2c3252; border-radius: 10px;
+    background: #1a1f36; color: #ece7dd; cursor: pointer; text-align: left;
+    font-family: inherit; font-size: 12.5px;
+  }
+  .lib-item:hover { border-color: #f2a93b; background: #232945; }
+  .lib-main { flex: 1; min-width: 0; }
+  .lib-title {
+    display: block; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; line-height: 1.35;
+  }
+  .lib-meta { display: block; font-size: 10.5px; color: #8c8fa3; margin-top: 3px; }
+  .lib-ring { flex: none; font-size: 11px; color: #f2a93b; font-variant-numeric: tabular-nums; }
+  .lib-del {
+    flex: none; width: 24px; height: 24px; border: none; border-radius: 6px;
+    background: transparent; color: #6f7286; cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .lib-del:hover { background: #2c3252; color: #e06b6b; }
+  .lib-empty { font-size: 11.5px; color: #6f7286; line-height: 1.6; }
+
+  /* ---- Hàng cấp quyền ---- */
+  .perm {
+    display: flex; align-items: center; gap: 10px; margin-top: 14px;
+    padding: 11px 12px; border: 1px solid #2c3252; border-radius: 11px; background: #1a1f36;
+  }
+  .perm-text { flex: 1; font-size: 11.5px; color: #8c8fa3; line-height: 1.5; }
+  .perm-text b { display: block; color: #ece7dd; font-size: 12.5px; margin-bottom: 2px; font-weight: 600; }
+  .perm-btn {
+    flex: none; padding: 7px 12px; border-radius: 8px; border: 1px solid #2c3252;
+    background: #0e1220; color: #ece7dd; font-family: inherit; font-size: 11.5px; cursor: pointer;
+  }
+  .perm-btn:hover { border-color: #f2a93b; }
+  .perm.on { border-color: #2f5d3a; }
+  .perm.on .perm-btn { color: #8c8fa3; }
 </style>
 </head>
 <body>
@@ -143,6 +191,20 @@
         <button data-step="size:1" aria-label="Tăng cỡ chữ">+</button>
       </div>
     </div>
+  </div>
+
+  <div class="sec-label">
+    <span>Đang đọc dở</span>
+    <button id="libClear" hidden>Xoá hết</button>
+  </div>
+  <div class="lib" id="lib"></div>
+
+  <div class="perm" id="perm">
+    <div class="perm-text">
+      <b>Đọc tiếp trên mọi trang</b>
+      <span id="permDesc">Cần cấp quyền để mở lại bài từ danh sách trên.</span>
+    </div>
+    <button class="perm-btn" id="permBtn">Cấp quyền</button>
   </div>
 
   <div class="foot">

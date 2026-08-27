@@ -91,15 +91,15 @@
 <body>
   <div class="brand">
     <h1>Lamp</h1>
-    <span>PDF</span>
+    <span>PDF · EPUB</span>
   </div>
-  <div class="sub">Trích xuất chữ từ PDF rồi đọc nhanh bằng RSVP.</div>
+  <div class="sub">Trích xuất chữ từ PDF hoặc EPUB rồi đọc nhanh bằng RSVP.</div>
 
   <div class="card">
     <label class="drop" id="drop">
-      <strong>Chọn file PDF</strong>
+      <strong>Chọn file PDF hoặc EPUB</strong>
       <small>hoặc kéo thả file vào đây</small>
-      <input type="file" id="file" accept="application/pdf,.pdf">
+      <input type="file" id="file" accept="application/pdf,.pdf,application/epub+zip,.epub">
     </label>
     <div class="bar" id="bar"><i id="barFill"></i></div>
     <div class="status" id="status">Chưa chọn file nào.</div>
@@ -110,6 +110,7 @@
   </div>
 
   <script src="../content/defaults.js"></script>
+  <script src="../content/epub.js"></script>
   <script src="../content/engine.js"></script>
   <script src="../content/reader.js"></script>
   <script type="module" src="viewer.js"></script>

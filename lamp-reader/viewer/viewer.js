@@ -133,6 +133,11 @@ async function startReading(text, title) {
     .map((s) => s.trim())
     .filter((s) => s.length > 2)
     .map((s) => ({ type: s.length < 70 && !/[.!?]$/.test(s) ? "h" : "p", text: s }));
+  await openReaderWith(blocks, title);
+}
+
+// Dùng chung cho PDF (đã tách khối thô) và EPUB (đã có khối đúng cấu trúc)
+async function openReaderWith(blocks, title) {
   window.__lampExtract = () => ({ title, source: "pdf", blocks });
 
   // Lấy TOÀN BỘ cài đặt đã lưu. Bản cũ chỉ hỏi 4 khoá, trong đó
@@ -142,18 +147,43 @@ async function startReading(text, title) {
   const settings = await chrome.storage.sync.get(null);
   window.__lampReader.open(settings);
 
-  const words = text.split(/\s+/).filter(Boolean).length;
+  const words = blocks.reduce((n, b) => n + b.text.split(/\s+/).filter(Boolean).length, 0);
   setStatus(`Đang đọc ${words.toLocaleString("vi-VN")} từ. Nhấn Esc để quay lại.`);
+}
+
+async function startReadingBlocks(blocks, title) {
+  if (!window.__lampReader) {
+    setStatus("Không nạp được trình đọc (content/reader.js).", true);
+    return;
+  }
+  await openReaderWith(blocks, title);
+}
+
+async function handleEpub(file) {
+  setStatus("Đang mở EPUB…");
+  const buf = await file.arrayBuffer();
+  const { title, blocks, chapters } = await window.__lampEpub.parse(buf, (i, n) => {
+    setStatus(`Đang đọc chương ${i}/${n}…`);
+    setProgress(i, n);
+  });
+  setProgress(0, 0);
+  setStatus(`Đã đọc ${chapters} chương.`);
+  // EPUB đã cho sẵn khối có cấu trúc (tiêu đề/đoạn/danh sách) nên đưa thẳng
+  // vào trình đọc, không phải đi qua bước tách đoạn thô như PDF.
+  await startReadingBlocks(blocks, title || file.name);
 }
 
 async function handleFile(file) {
   if (!file) return;
-  if (!/pdf$/i.test(file.name) && file.type !== "application/pdf") {
-    setStatus("File này không phải PDF.", true);
+  const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+  const isEpub = /\.epub$/i.test(file.name) || file.type === "application/epub+zip";
+  if (!isPdf && !isEpub) {
+    setStatus("Chỉ đọc được file PDF hoặc EPUB.", true);
     return;
   }
-  setStatus("Đang mở file…");
   try {
+    if (isEpub) { await handleEpub(file); return; }
+    setStatus("Đang mở file…");
     const buf = await file.arrayBuffer();
     const { text, numPages } = await extractPdf({ data: buf });
     setStatus(`Đã trích xuất ${numPages} trang.`);
@@ -185,21 +215,53 @@ dropEl.addEventListener("drop", (e) => {
   handleFile(e.dataTransfer?.files?.[0]);
 });
 
-// Nếu trang được mở kèm ?file=<url> (từ Alt+R trên một link .pdf), tự tải luôn
-(async () => {
-  const target = new URLSearchParams(location.search).get("file");
-  if (!target) return;
+// Nếu trang được mở kèm ?file=<url> (từ Alt+R trên một link .pdf), tự tải luôn.
+//
+// Extension không còn xin sẵn quyền cho mọi trang (xem optional_host_permissions
+// trong manifest), nên việc tải PDF từ một tên miền bất kỳ cần được cho phép
+// riêng. Thay vì báo lỗi cụt ngủn, hiện hẳn một nút để cấp quyền ngay tại chỗ —
+// bấm nút là một cử chỉ người dùng hợp lệ để gọi permissions.request().
+async function loadRemotePdf(target) {
   setStatus("Đang tải PDF từ đường dẫn…");
   try {
     const { text, numPages } = await extractPdf(target);
     setStatus(`Đã trích xuất ${numPages} trang.`);
     setProgress(0, 0);
     await startReading(text, decodeURIComponent(target.split("/").pop()));
+    return true;
   } catch (err) {
     setProgress(0, 0);
-    setStatus(
-      "Không tải được PDF từ đường dẫn này (có thể do quyền truy cập). Hãy chọn file thủ công bên trên.",
-      true
-    );
+    return false;
   }
+}
+
+function askPermissionFor(target, onGranted) {
+  let origin = null;
+  try { origin = new URL(target).origin + "/*"; } catch (e) {}
+  if (!origin || !chrome.permissions) {
+    setStatus("Không tải được PDF từ đường dẫn này. Hãy chọn file thủ công bên trên.", true);
+    return;
+  }
+  setStatus("Cần cấp quyền để tải PDF từ " + new URL(target).hostname + ".", true);
+  const btn = document.createElement("button");
+  btn.className = "pdf";
+  btn.textContent = "Cấp quyền rồi thử lại";
+  btn.addEventListener("click", async () => {
+    let granted = false;
+    try { granted = await chrome.permissions.request({ origins: [origin] }); } catch (e) {}
+    if (!granted) {
+      setStatus("Chưa được cấp quyền. Hãy chọn file thủ công bên trên.", true);
+      return;
+    }
+    btn.remove();
+    onGranted();
+  });
+  statusEl.parentNode.appendChild(btn);
+}
+
+(async () => {
+  const target = new URLSearchParams(location.search).get("file");
+  if (!target) return;
+  if (await loadRemotePdf(target)) return;
+  askPermissionFor(target, () => loadRemotePdf(target));
 })();
