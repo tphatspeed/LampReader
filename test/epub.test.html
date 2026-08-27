@@ -6,13 +6,22 @@
  .ok{color:#6bd06b}.fail{color:#ff6b6b;font-weight:700}.head{color:#f2a93b;margin-top:10px;display:block}
 </style></head><body>
 <div id="log"></div>
-<script src="../lamp-reader/content/epub.js"></script>
-<script src="../lamp-reader/content/engine.js"></script>
+<script>
+// Nạp mã nguồn kèm dấu thời gian để trình duyệt KHÔNG dùng bản cache cũ.
+// Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
+(function () {
+  var v = Date.now();
+  ["../lamp-reader/content/epub.js", "../lamp-reader/content/engine.js"].forEach(function (src) {
+    document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
+  });
+})();
+</script>
 <script>
 const log=document.getElementById("log");let pass=0,fail=0;const failed=[];
 function head(t){log.innerHTML+=`<span class="head">== ${t} ==</span>\n`}
 function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</span>\n`}
  else{fail++;failed.push(n);log.innerHTML+=`<span class="fail">  FAIL ${n}${e?"  → "+e:""}</span>\n`}}
+function note(t){log.innerHTML+=`<span style="color:#888">       ${t}</span>\n`}
 
 (async function run(){
   head("đọc file EPUB thật (ZIP + deflate, tự giải nén)");
@@ -61,6 +70,35 @@ function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</sp
     ok("dàn bài dựng được từ EPUB", E.buildOutline(res.blocks, toks).length >= 3);
     ok("nhận ra là tiếng Việt", E.detectVietnamese(res.blocks.map(b=>b.text).join(" ")));
   } else ok("engine.js nạp được", false, "thiếu engine");
+
+  head("ca khó: <br>, chú thích cuối trang, ngôn ngữ trong OPF");
+  const kho = await window.__lampEpub.parse(
+    await (await fetch("fixtures/epub-kho.epub")).arrayBuffer());
+  const kt = kho.blocks.map(b => b.text);
+  note(JSON.stringify(kt, null, 1));
+  ok("lấy ngôn ngữ từ dc:language", kho.lang === "vi", kho.lang);
+  ok("tên sách có dấu tiếng Việt", kho.title === "Thơ và chú thích", kho.title);
+  ok("<br> KHÔNG làm dính chữ hai dòng",
+     !kt.some(t => /thơDòng|đóDòng/.test(t)), kt.find(t => /thơDòng|đóDòng/.test(t)));
+  ok("ba dòng thơ đều còn đủ",
+     kt.some(t => t.includes("Dòng thứ nhất") && t.includes("Dòng thứ hai") && t.includes("Dòng thứ ba")),
+     kt.find(t => t.includes("Dòng thứ nhất")));
+  ok("chú thích cuối trang bị loại khỏi mạch đọc",
+     !kt.some(t => t.includes("không nên chen vào mạch đọc")),
+     kt.find(t => t.includes("chú thích cuối trang")));
+  ok("số tham chiếu chú thích bị bỏ, câu vẫn liền",
+     kt.some(t => /chứa chú thích\s+ở giữa câu/.test(t)),
+     kt.find(t => t.includes("ở giữa câu")));
+  ok("đoạn sau chú thích vẫn đọc được",
+     kt.some(t => t.includes("Đoạn cuối cùng của chương")));
+
+  head("EPUB có DRM: báo đúng lý do");
+  try {
+    await window.__lampEpub.parse(await (await fetch("fixtures/epub-drm.epub")).arrayBuffer());
+    ok("từ chối sách có DRM", false, "không ném lỗi");
+  } catch (e) {
+    ok("từ chối sách có DRM", /DRM|bản quyền/.test(e.message), e.message);
+  }
 
   head("file hỏng thì báo lỗi tử tế, không văng");
   try {

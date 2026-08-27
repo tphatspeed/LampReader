@@ -94,6 +94,13 @@
 
   const TEXT_TAGS = "p, li, blockquote, h1, h2, h3, h4, h5, h6, dd, td, pre";
   const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG"]);
+  // Chú thích cuối trang / chú thích bên lề: đúng chỗ của chúng là ngoài mạch
+  // đọc. Để nguyên thì đang đọc giữa chừng bị chen một đoạn không liên quan.
+  const ASIDE_SEL = 'aside[epub\\:type~="footnote"], aside[epub\\:type~="endnote"], ' +
+    'aside[epub\\:type~="rearnote"], [role="doc-footnote"], [role="doc-endnote"], ' +
+    '.footnote, .footnotes, .endnote';
+  // Số tham chiếu chú thích ("…câu văn¹ tiếp theo") — bỏ luôn cái số, giữ câu
+  const NOTEREF_SEL = '[epub\\:type~="noteref"], [role="doc-noteref"], sup a, a.noteref';
 
   function blockTypeOf(tag) {
     if (/^h[1-6]$/.test(tag)) return "h";
@@ -104,12 +111,21 @@
   function xhtmlToBlocks(html, seen) {
     const doc = new DOMParser().parseFromString(html, "text/html");
     doc.querySelectorAll("script, style, noscript").forEach((el) => el.remove());
+    const safeRemove = (sel) => {
+      try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch (e) {}
+    };
+    safeRemove(ASIDE_SEL);
+    safeRemove(NOTEREF_SEL);
+    // <br> là ngắt dòng thật (thơ, địa chỉ). textContent nuốt mất nó khiến hai
+    // dòng dính liền thành một từ ghép sai — thay bằng khoảng trắng trước.
+    doc.querySelectorAll("br").forEach((el) => el.replaceWith(doc.createTextNode(" \u2028 ")));
     const blocks = [];
     doc.querySelectorAll(TEXT_TAGS).forEach((el) => {
       if (SKIP.has(el.tagName)) return;
       // Bỏ khối lồng nhau: <li> chứa <p> thì chỉ lấy <p>, tránh chữ lặp hai lần
       if (el.querySelector(TEXT_TAGS)) return;
-      const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+      const raw = (el.textContent || "").replace(/[ \t\r\n]+/g, " ").trim();
+      const text = raw.replace(/\s*\u2028\s*/g, " / ").trim();
       if (text.length < 2) return;
       const key = text.slice(0, 80);
       if (seen.has(key)) return;
@@ -132,6 +148,12 @@
   async function parse(buf, onProgress) {
     const zip = readEntries(buf);
 
+    // 0. EPUB có DRM: chữ bên trong đã bị mã hoá, giải nén ra cũng chỉ là rác.
+    //    Báo đúng lý do thay vì để người dùng nhận một lỗi khó hiểu.
+    if (zip.entries.has("META-INF/encryption.xml")) {
+      throw new Error("Sách này có khoá bản quyền (DRM) nên không đọc được chữ bên trong");
+    }
+
     // 1. container.xml chỉ ra file .opf nằm đâu
     const containerRaw = await readFile(zip, buf, "META-INF/container.xml");
     if (!containerRaw) throw new Error("Thiếu META-INF/container.xml — file này không phải EPUB");
@@ -149,6 +171,12 @@
     const titleEl = opf.getElementsByTagName("dc:title")[0] ||
                     opf.getElementsByTagName("title")[0];
     if (titleEl) title = (titleEl.textContent || "").trim();
+
+    // Ngôn ngữ khai trong OPF đáng tin hơn việc đoán qua dấu thanh — sách tiếng
+    // Việt mà chương đầu toàn tên riêng nước ngoài thì đoán dễ trượt.
+    const langEl = opf.getElementsByTagName("dc:language")[0] ||
+                   opf.getElementsByTagName("language")[0];
+    const lang = langEl ? (langEl.textContent || "").trim().toLowerCase() : "";
 
     const hrefById = new Map();
     Array.from(opf.getElementsByTagName("item")).forEach((it) => {
@@ -178,7 +206,7 @@
     }
 
     if (!blocks.length) throw new Error("Không bóc được chữ nào từ EPUB này");
-    return { title, blocks, chapters: spine.length };
+    return { title, lang, blocks, chapters: spine.length };
   }
 
   window.__lampEpub = { parse };

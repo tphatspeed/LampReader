@@ -56,11 +56,11 @@ test/            Bộ kiểm thử (không nằm trong extension)
 
 ## Kiểm thử
 
-191 phép kiểm thử, chạy trên chính mã nguồn thật:
+226 phép kiểm thử, chạy trên chính mã nguồn thật:
 
 ```bash
 node test/engine.test.js          # 53 phép — logic thuần, không cần trình duyệt
-python3 -m http.server 8899       # rồi mở các trang test/ trong trình duyệt
+python3 test/serve.py             # rồi mở các trang test/ trong trình duyệt
 ```
 
 Chi tiết ở [phần Kiểm thử](lamp-reader/README.md#chạy-kiểm-thử) của tài liệu chính.

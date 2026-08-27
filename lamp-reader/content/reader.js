@@ -342,30 +342,53 @@
     state.host = host;
     state.root = root;
     wireEvents();
-    checkFonts();
+    loadFonts();
   }
 
-  // Ba phông nhúng sẵn — nếu người dùng thả sai tên/đường dẫn file vào
-  // fonts/, nút chọn phông tương ứng tự hiện dấu cảnh báo thay vì âm thầm
-  // lùi về phông hệ thống khiến tưởng nhầm là "chưa đủ phông".
-  const EMBEDDED_FONTS = {
-    vietnam: "fonts/Be_Vietnam_Pro/BeVietnamPro-Regular.ttf",
-    serif: "fonts/Literata/Literata-VariableFont_opsz,wght.ttf",
-    notoserif: "fonts/Noto_Serif/NotoSerif-VariableFont_wdth,wght.ttf"
-  };
-  async function checkFonts() {
-    if (typeof FontFace === "undefined") return;
-    await Promise.all(Object.entries(EMBEDDED_FONTS).map(async ([key, path]) => {
+  // Nạp phông nhúng sẵn.
+  //
+  // Bắt buộc phải dùng FontFace API chứ không dùng @font-face trong CSS: overlay
+  // sống trong Shadow DOM, mà theo chuẩn CSS Scoping thì @font-face khai trong
+  // shadow tree bị bỏ qua — chỉ font set của document mới được dùng để so khớp.
+  // Bản trước khai trong overlay.css nên ba phông này chưa bao giờ thật sự hiển
+  // thị: ngăn xếp phông cứ lặng lẽ rơi về phông hệ thống mà không báo lỗi.
+  const EMBEDDED_FONTS = [
+    { key: "vietnam",   family: "Lamp Vietnam",    weight: "400",     path: "fonts/Be_Vietnam_Pro/BeVietnamPro-Regular.ttf" },
+    { key: "vietnam",   family: "Lamp Vietnam",    weight: "600",     path: "fonts/Be_Vietnam_Pro/BeVietnamPro-SemiBold.ttf" },
+    { key: "vietnam",   family: "Lamp Vietnam",    weight: "700",     path: "fonts/Be_Vietnam_Pro/BeVietnamPro-Bold.ttf" },
+    { key: "serif",     family: "Lamp Serif",      weight: "100 900", path: "fonts/Literata/Literata-VariableFont_opsz,wght.ttf" },
+    { key: "notoserif", family: "Lamp Noto Serif", weight: "100 900", path: "fonts/Noto_Serif/NotoSerif-VariableFont_wdth,wght.ttf" }
+  ];
+
+  let fontsLoaded = false;
+  async function loadFonts() {
+    if (fontsLoaded) return;
+    fontsLoaded = true;
+    if (typeof FontFace === "undefined" || !document.fonts) return;
+
+    const failed = new Set();
+    await Promise.all(EMBEDDED_FONTS.map(async (f) => {
       try {
-        await new FontFace("__lamp_check_" + key, `url("${chrome.runtime.getURL(path)}")`).load();
+        const face = new FontFace(f.family, `url("${chrome.runtime.getURL(f.path)}")`,
+          { weight: f.weight, display: "swap" });
+        await face.load();
+        document.fonts.add(face);
       } catch (e) {
-        const btn = $(`[data-font="${key}"]`);
-        if (btn) {
-          btn.classList.add("font-missing");
-          btn.title = "Không nạp được file phông này — xem fonts/README.txt";
-        }
+        failed.add(f.key);
       }
     }));
+
+    // Nạp hụt file nào thì nút phông tương ứng tự hiện dấu cảnh báo, thay vì
+    // âm thầm lùi về phông hệ thống khiến tưởng nhầm là "chưa đủ phông".
+    failed.forEach((key) => {
+      const btn = $(`[data-font="${key}"]`);
+      if (btn) {
+        btn.classList.add("font-missing");
+        btn.title = "Không nạp được file phông này — xem fonts/README.txt";
+      }
+    });
+    // Phông về muộn hơn lần vẽ đầu: vẽ lại để chữ đổi sang phông đúng
+    if (state.open) render();
   }
 
   // ============================ SỰ KIỆN ============================
@@ -1591,7 +1614,10 @@
     }
 
     state.blocks = blocks;
-    state.vietnamese = E.detectVietnamese(joined);
+    // Nguồn khai báo ngôn ngữ (EPUB có dc:language) thì tin nó; không thì mới
+    // đoán qua dấu thanh. Sách tiếng Việt mà chương đầu đầy tên riêng nước
+    // ngoài rất dễ bị đoán trượt.
+    state.vietnamese = ex.lang ? /^vi/i.test(ex.lang) : E.detectVietnamese(joined);
     state.tokens = E.buildTokens(blocks, state.chunkSize);
     // Trang xem PDF luôn có cùng URL nên mọi file PDF mở từ máy sẽ dùng chung
     // một khoá tiến trình — thêm tên tài liệu vào khoá để tách chúng ra.

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><title>Lamp — kiểm thử trích xuất PDF</title>
+<style>
+ body{font:14px/1.6 -apple-system,system-ui,sans-serif;margin:20px;background:#111;color:#ddd}
+ #log{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ .ok{color:#6bd06b}.fail{color:#ff6b6b;font-weight:700}.head{color:#f2a93b;margin-top:10px;display:block}
+ .dim{color:#888}
+</style></head><body>
+<div id="log"></div>
+<script type="module">
+import { getDocument, GlobalWorkerOptions } from "../lamp-reader/vendor/pdf.mjs";
+import { pagesToBlocks, classify, itemsToLines, splitColumns, stripFurniture, dropRepeatedLines }
+  from "../lamp-reader/content/pdftext.js";
+GlobalWorkerOptions.workerSrc = "../lamp-reader/vendor/pdf.worker.mjs";
+
+const log=document.getElementById("log");let pass=0,fail=0;const failed=[];
+function head(t){log.innerHTML+=`<span class="head">== ${t} ==</span>\n`}
+function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</span>\n`}
+ else{fail++;failed.push(n);log.innerHTML+=`<span class="fail">  FAIL ${n}${e?"  → "+e:""}</span>\n`}}
+function note(t){log.innerHTML+=`<span class="dim">       ${t}</span>\n`}
+
+async function loadPages(url){
+  const pdf = await getDocument({ url }).promise;
+  const pages=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const pg=await pdf.getPage(i);
+    const vp=pg.getViewport({scale:1});
+    pages.push({items:(await pg.getTextContent()).items, width:vp.width, height:vp.height});
+  }
+  return pages;
+}
+
+// ---- Bản CŨ, chép nguyên từ viewer.js để so sánh ----
+function cuItemsToParagraphs(items){
+  const lines=[];let current=[];let lastY=null;
+  for(const item of items){
+    if(typeof item.str!=="string")continue;
+    const y=item.transform?item.transform[5]:null;
+    const newLineByGap=lastY!==null&&y!==null&&Math.abs(y-lastY)>2;
+    if(newLineByGap&&current.length){lines.push(current.join(""));current=[];}
+    current.push(item.str);
+    if(y!==null)lastY=y;
+    if(item.hasEOL){lines.push(current.join(""));current=[];lastY=null;}
+  }
+  if(current.length)lines.push(current.join(""));
+  const paragraphs=[];let buffer="";
+  for(let line of lines){
+    line=line.replace(/\s+/g," ").trim();
+    if(!line){if(buffer){paragraphs.push(buffer);buffer="";}continue;}
+    if(buffer.endsWith("-"))buffer=buffer.slice(0,-1)+line;
+    else buffer=buffer?buffer+" "+line:line;
+    if(/[.!?:;]["')\]]?$/.test(line)){paragraphs.push(buffer);buffer="";}
+  }
+  if(buffer)paragraphs.push(buffer);
+  return paragraphs;
+}
+
+(async function run(){
+  head("PDF một cột: tiêu đề, đoạn văn, số trang, header lặp");
+  const p1 = await loadPages("fixtures/pdf-mot-cot.pdf");
+  ok("đọc được 3 trang", p1.length===3, String(p1.length));
+
+  const cu = p1.flatMap(p=>cuItemsToParagraphs(p.items));
+  const moi = pagesToBlocks(p1);
+  note(`bản cũ: ${cu.length} đoạn · bản mới: ${moi.length} khối`);
+
+  const t = (b)=>b.map(x=>typeof x==="string"?x:x.text);
+  const txtCu = t(cu), txtMoi = t(moi);
+
+  ok("BẢN CŨ băm đoạn văn thành nhiều mảnh vụn", cu.length > moi.length,
+     `cũ ${cu.length} vs mới ${moi.length}`);
+
+  head("số trang bị loại bỏ");
+  ok("bản cũ VẪN đọc số trang", txtCu.some(s=>/^\s*[123]\s*$/.test(s)) || txtCu.some(s=>/\s[23]$/.test(s)),
+     "(nếu không thì bản cũ may mắn)");
+  ok("bản mới KHÔNG còn số trang lẻ", !txtMoi.some(s=>/^\s*\d{1,2}\s*$/.test(s)),
+     txtMoi.filter(s=>/^\s*\d{1,2}\s*$/.test(s)).join("|"));
+
+  head("header lặp bị loại bỏ");
+  const hdr = "Machine Learning Quarterly Review";
+  ok("bản cũ giữ header ở cả 3 trang", txtCu.filter(s=>s.includes(hdr)).length >= 2,
+     String(txtCu.filter(s=>s.includes(hdr)).length));
+  ok("bản mới bỏ hết header lặp", txtMoi.filter(s=>s.includes(hdr)).length === 0,
+     String(txtMoi.filter(s=>s.includes(hdr)).length));
+
+  head("tiêu đề nhận theo CỠ CHỮ THẬT");
+  const heads = moi.filter(b=>b.type==="h");
+  note("tiêu đề tìm được: " + JSON.stringify(heads.map(h=>`${h.text} (${Math.round(h.size)}pt, cấp ${h.level})`)));
+  ok("nhận ra 2 tiêu đề", heads.length===2, String(heads.length));
+  ok("H1 đúng nội dung", heads[0] && heads[0].text.includes("Understanding Neural Networks"), heads[0]&&heads[0].text);
+  ok("H2 đúng nội dung", heads[1] && heads[1].text.includes("Training at Scale"), heads[1]&&heads[1].text);
+  ok("H1 cỡ chữ lớn hơn H2", heads[0]&&heads[1]&&heads[0].size>heads[1].size);
+  ok("H1 cấp nhỏ hơn H2", heads[0]&&heads[1]&&heads[0].level<heads[1].level,
+     heads.map(h=>h.level).join(","));
+  ok("thân bài không bị nhận nhầm là tiêu đề",
+     moi.filter(b=>b.type==="p").every(b=>b.size<15));
+
+  head("đoạn văn được giữ nguyên vẹn, không băm theo câu");
+  const doan1 = txtMoi.find(s=>s.includes("Artificial intelligence"));
+  note("đoạn 1: " + JSON.stringify((doan1||"").slice(0,110)));
+  ok("đoạn 1 gộp đủ 2 câu thành MỘT khối",
+     doan1 && doan1.includes("changing the way") && doan1.includes("billions of dollars"),
+     doan1 ? "thiếu vế sau" : "không tìm thấy");
+  const cuDoan1 = txtCu.find(s=>s.includes("Artificial intelligence")) || "";
+  note("bản cũ cắt thành: " + JSON.stringify(cuDoan1.slice(0,90)));
+
+  head("PDF HAI CỘT: thứ tự đọc");
+  const p2 = await loadPages("fixtures/pdf-hai-cot.pdf");
+  const moi2 = pagesToBlocks(p2);
+  const all2 = t(moi2).join(" ");
+  note("kết quả: " + JSON.stringify(all2.slice(0, 150)));
+  const iTrai = all2.indexOf("Rapid serial visual");
+  const iPhai = all2.indexOf("ability to regress");
+  ok("đọc hết cột trái rồi mới sang cột phải", iTrai >= 0 && iPhai > iTrai,
+     `trái@${iTrai} phải@${iPhai}`);
+  ok("cột trái liền mạch, không bị cột phải chen vào",
+     /fixed point\.?\s+This eliminates/.test(all2) || all2.includes("at a fixed point. This eliminates"),
+     "câu bị đứt quãng");
+  ok("tiêu đề trải ngang được tách riêng",
+     moi2.some(b=>b.type==="h"&&b.text.includes("Reading Without Eye Movement")),
+     JSON.stringify(moi2.filter(b=>b.type==="h").map(b=>b.text)));
+
+  head("khối trả về đúng định dạng engine.js cần");
+  ok("mọi khối có type hợp lệ", moi.every(b=>["h","p","li"].includes(b.type)));
+  ok("mọi khối có text không rỗng", moi.every(b=>b.text && b.text.trim()));
+  ok("tiêu đề có level 1..6", heads.every(h=>h.level>=1&&h.level<=6));
+
+  head("biên");
+  ok("trang rỗng không làm vỡ", pagesToBlocks([{items:[],width:612,height:792}]).length===0);
+  ok("mảng rỗng không làm vỡ", pagesToBlocks([]).length===0);
+
+  log.innerHTML+=`\n<span class="${fail?"fail":"ok"}">${pass} passed, ${fail} failed</span>\n`;
+  window.__pdfTestResult={pass,fail,failed};
+})().catch(e=>{
+  log.innerHTML+=`<span class="fail">THROWN: ${e&&e.stack||e}</span>\n`;
+  window.__pdfTestResult={pass,fail:fail+1,failed:failed.concat("THROWN: "+e)};
+});
+</script>
+</body></html>

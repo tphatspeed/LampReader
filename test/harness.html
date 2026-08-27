@@ -51,10 +51,16 @@ window.chrome = {
   }
 };
 </script>
-<script src="../lamp-reader/content/defaults.js"></script>
-<script src="../lamp-reader/content/extractor.js"></script>
-<script src="../lamp-reader/content/engine.js"></script>
-<script src="../lamp-reader/content/reader.js"></script>
+<script>
+// Nạp mã nguồn kèm dấu thời gian để trình duyệt KHÔNG dùng bản cache cũ.
+// Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
+(function () {
+  var v = Date.now();
+  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
+    document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
+  });
+})();
+</script>
 <script>
 const log = document.getElementById("log");
 let pass = 0, fail = 0;
@@ -339,6 +345,32 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   await wait(600);
   const after = window.__writes.sync - before;
   ok("gộp lại thành đúng 1 lượt ghi", after === 1, `đã ghi ${after} lần`);
+
+  head("phông nhúng sẵn áp dụng THẬT (không chỉ tải được)");
+  // Bài học: @font-face khai trong Shadow DOM bị chuẩn CSS Scoping bỏ qua, nên
+  // phông từng "tải được" mà chưa bao giờ hiển thị. Chỉ kiểm tra FontFace.load()
+  // là không đủ — phải ĐO BỀ RỘNG chữ render ra mới biết phông có áp dụng không.
+  await wait(1200); // chờ loadFonts() xong
+  {
+    const probe = document.createElement("span");
+    probe.textContent = "Tiếng Việt ế ộ ữ ằ Hamburgefonstiv";
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;font-size:40px;font-weight:400;";
+    $(".backdrop").appendChild(probe);
+    const w = (fam) => { probe.style.fontFamily = fam; return Math.round(probe.getBoundingClientRect().width); };
+    const gia = w('"KhongCoFontNay12345"');
+    const vn = w('"Lamp Vietnam"'), se = w('"Lamp Serif"'), no = w('"Lamp Noto Serif"');
+    probe.remove();
+
+    const dangKy = [];
+    document.fonts.forEach(f => { if (/Lamp/.test(f.family)) dangKy.push(f.family + " " + f.weight); });
+    ok("đăng ký đủ 5 face vào document.fonts", dangKy.length === 5, dangKy.join(" | "));
+    ok("Be Vietnam áp dụng thật (khác phông dự phòng)", vn !== gia, `${vn} vs ${gia}`);
+    ok("Literata áp dụng thật", se !== gia, `${se} vs ${gia}`);
+    ok("Noto Serif áp dụng thật", no !== gia, `${no} vs ${gia}`);
+    ok("ba phông cho ba bề rộng khác nhau", new Set([vn, se, no]).size === 3, `${vn}/${se}/${no}`);
+    ok("không nút phông nào bị đánh dấu thiếu file",
+       $$("[data-font]").filter(b => b.classList.contains("font-missing")).length === 0);
+  }
 
   head("trợ năng: overlay là hộp thoại");
   const hostEl = document.getElementById("lamp-reader-host");

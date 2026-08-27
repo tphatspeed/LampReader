@@ -197,6 +197,20 @@ trang đọc riêng của nó.
 **PDF.** Thư viện pdf.js đã nhúng sẵn trong `vendor/` (v6.2.108, dạng ES module) —
 không cần tải thêm gì.
 
+PDF không lưu "đoạn văn" hay "tiêu đề" — nó chỉ lưu từng mẩu chữ kèm toạ độ và
+cỡ chữ. `content/pdftext.js` dựng ngược lại cấu trúc:
+
+- **Nhận tiêu đề theo cỡ chữ thật**, không đoán theo độ dài chuỗi. Nhờ vậy dàn
+  bài dùng được với PDF, và cấp tiêu đề (h1/h2/h3) suy ra từ thứ hạng cỡ chữ.
+- **Đọc đúng thứ tự với PDF hai cột** (bài báo khoa học). Chữ cùng độ cao nhưng
+  cách nhau một rãnh rộng được tách thành hai dòng khác nhau, rồi đọc hết cột
+  trái mới sang cột phải.
+- **Bỏ số trang và header/footer lặp.** So khớp sau khi thay chữ số bằng `#` nên
+  "Trang 1"/"Trang 2" được nhận ra là cùng một thứ.
+- **Giữ đoạn văn nguyên vẹn.** Chỉ cắt đoạn khi có khoảng trắng dọc rộng bất
+  thường, đổi cỡ chữ, thụt đầu dòng, hoặc dòng cuối kết thúc bằng dấu câu *và*
+  ngắn hơn hẳn bề rộng cột.
+
 - File trên máy (`file://`): cần bật thêm **Allow access to file URLs** trong phần
   chi tiết của extension tại `chrome://extensions`.
 - File từ đường dẫn trên mạng: lần đầu sẽ hiện nút **Cấp quyền rồi thử lại** (vì
@@ -208,7 +222,12 @@ không cần tải thêm gì.
 và trình duyệt đã có sẵn `DecompressionStream("deflate-raw")` — đúng thuật toán ZIP
 dùng — nên `content/epub.js` chỉ cần tự đọc bảng thư mục của ZIP rồi đi theo `spine`
 trong file `.opf`. Nhờ vậy giữ được cả cấu trúc tiêu đề/đoạn/danh sách, dàn bài
-dùng được luôn. Chưa hỗ trợ EPUB có DRM.
+dùng được luôn.
+
+Các trường hợp đã xử lý riêng: `<br>` thành ngắt dòng thật (thơ, địa chỉ) thay
+vì dính chữ; chú thích cuối trang và số tham chiếu chú thích bị loại khỏi mạch
+đọc; ngôn ngữ lấy từ `dc:language` trong OPF thay vì đoán qua dấu thanh. Sách có
+khoá bản quyền (DRM) được báo đúng lý do thay vì một lỗi khó hiểu.
 
 ## Quyền và dữ liệu
 
@@ -238,8 +257,8 @@ hoặc không có, hoặc tính tiền:
 |---|---|---|
 | Giá | Miễn phí, không tài khoản | Bản trả phí ~$4/tháng cho tính năng đầy đủ |
 | Giới hạn dùng | Không | Bản miễn phí có hạn mức theo ngày cho TTS/PDF/ePub |
-| Dữ liệu | Chạy hoàn toàn tại máy | Dịch vụ đám mây |
-| Quyền truy cập | Không xin quyền nào khi cài | Xin quyền đọc mọi trang ngay từ đầu |
+| Dữ liệu | Chạy hoàn toàn tại máy | Dịch vụ đám mây, có tài khoản |
+| Dữ liệu ra khỏi máy | Không có lệnh gọi mạng nào tới máy chủ ngoài | Khai báo trên Chrome Web Store là có thu thập *User activity* và *Website content* |
 | Kiểm tra hiểu | Tự sinh từ chính bài vừa đọc, sai thì hiện lại câu gốc | Thư viện bài tập sau bản trả phí |
 | Luyện tốc độ | Đọc bài này ở 3 mức WPM, quiz từng mức, chỉ ra mức phù hợp | Sau bản trả phí |
 | Thống kê | Điểm kiểm tra theo từng mức WPM | Theo dõi tốc độ, không đối chiếu mức độ hiểu |
@@ -267,6 +286,7 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 │   ├── extractor.js         Tách nội dung chính khỏi menu/quảng cáo/sidebar
 │   ├── engine.js            Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
 │   ├── epub.js              Đọc EPUB: tự giải nén ZIP, đi theo spine
+│   ├── pdftext.js           Dựng cấu trúc từ mẩu chữ PDF: cột, đoạn, tiêu đề
 │   ├── reader.js            Giao diện overlay RSVP (Shadow DOM)
 │   └── overlay.css          5 bảng màu (+ tuỳ chọn theo hệ thống) và bố cục
 ├── popup/                   Popup khi bấm icon: thư viện, cài đặt nhanh, quyền
@@ -277,10 +297,12 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 
 test/                        ← KHÔNG nằm trong extension
 ├── engine.test.js           53 phép — logic thuần, chạy bằng node
-├── harness.html             85 phép — trình đọc, chạy thật trong trình duyệt
+├── harness.html             91 phép — trình đọc, chạy thật trong trình duyệt
 ├── popup.test.html          29 phép — popup, thư viện, cấp quyền
-├── epub.test.html           24 phép — đọc EPUB
-├── fixtures/                File EPUB/ZIP mẫu
+├── epub.test.html           32 phép — đọc EPUB
+├── pdf.test.html            21 phép — trích xuất PDF, so bản cũ với bản mới
+├── fixtures/                PDF/EPUB/ZIP mẫu + make_pdf.py (bộ sinh PDF)
+├── serve.py                 Server tĩnh không cache — dùng cái này để test
 └── demo.html                Bài viết mẫu để xem nhanh giao diện
 ```
 
@@ -291,7 +313,7 @@ thì chỉ sửa ở đó.
 
 ## Chạy kiểm thử
 
-Tổng cộng **191 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
+Tổng cộng **226 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
 `chrome`), không phải bản sao.
 
 Phần logic thuần chạy thẳng bằng node:
@@ -304,11 +326,16 @@ Phần tích hợp cần được phục vụ qua HTTP (mở bằng `file://` s�
 Từ thư mục gốc của dự án:
 
 ```bash
-python3 -m http.server 8899
+python3 test/serve.py
 ```
 
-Rồi mở lần lượt `harness.html`, `popup.test.html`, `epub.test.html` dưới
-`http://localhost:8899/test/`. Mỗi trang tự lái giao diện và in ra số phép đạt/hỏng.
+Dùng `test/serve.py` chứ đừng dùng `python3 -m http.server`: nó gửi header
+`no-store` để trình duyệt không giữ lại bản `.js` cũ. Thiếu điều đó, bộ kiểm thử
+sẽ âm thầm chạy trên mã nguồn lỗi thời và báo xanh sai.
+
+Rồi mở lần lượt `harness.html`, `popup.test.html`, `epub.test.html`,
+`pdf.test.html` dưới `http://localhost:8899/test/`. Mỗi trang tự lái giao diện
+và in ra số phép đạt/hỏng.
 
 `test/demo.html` mở sẵn trình đọc trên một bài mẫu để xem nhanh giao diện mà không
 cần cài extension.
@@ -335,13 +362,21 @@ cần cài extension.
 | Kiểm tra phông có nạp được không | `content/reader.js`, hàm `checkFonts` |
 | Danh sách "đang đọc dở" | `popup/popup.js`, hàm `readLibrary` |
 | Đọc EPUB / thêm định dạng khác | `content/epub.js`, hàm `parse` |
-| Cách ghép dòng PDF thành đoạn | `viewer/viewer.js`, hàm `itemsToParagraphs` |
+| Cách dựng cấu trúc từ PDF (cột, đoạn, tiêu đề) | `content/pdftext.js` |
 | Màu sắc, theme, bố cục responsive | `content/overlay.css` |
 | Phông chữ nhúng sẵn | `content/overlay.css` (các khối `@font-face`); xem `fonts/README.txt` |
 | Phím tắt mặc định | `manifest.json`, mục `commands` |
 
 ## Vài chỗ dễ vấp
 
+- **`@font-face` trong Shadow DOM bị bỏ qua.** Theo chuẩn CSS Scoping chỉ font
+  set của document mới được dùng để so khớp, nên phông nhúng phải nạp bằng
+  `FontFace` API rồi `document.fonts.add()` — xem `loadFonts()`. Khai trong CSS
+  của overlay thì phông lặng lẽ không hiển thị mà không báo lỗi gì, và kiểm tra
+  bằng `FontFace().load()` vẫn báo "ổn" vì nó không đi qua đường CSS. Muốn chắc
+  thì phải **đo bề rộng chữ render ra**.
+- **`getDocument()` của pdf.js v6 chỉ nhận object**, không nhận chuỗi URL trần
+  như bản cũ. Truyền chuỗi vào là nó ném lỗi và rơi vào catch chung.
 - **Overlay nằm trong Shadow DOM.** Listener bàn phím gắn ở `document` sẽ nhận
   `e.target` đã bị retarget về phần tử host (luôn là `DIV`), không bao giờ thấy
   `INPUT`. Muốn biết phần tử thật thì dùng `e.composedPath()[0]` — nếu không, gõ

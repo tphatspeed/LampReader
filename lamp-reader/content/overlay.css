@@ -948,55 +948,14 @@ kbd {
 .stat-grid { grid-template-columns: 1fr 1fr; }
 }
 
-/* ==================== Phông tuỳ chọn thả vào fonts/ ====================
-   Nếu file không tồn tại, trình duyệt bỏ qua và dùng phông kế tiếp trong
-   ngăn xếp. Xem fonts/README.txt để biết cách thêm — thư mục tải thẳng từ
-   Google Fonts (giữ nguyên tên) là dùng được luôn, không cần đổi tên file. */
+/* ==================== Phông nhúng sẵn ====================
+   KHÔNG khai @font-face ở đây. Theo chuẩn CSS Scoping, @font-face nằm trong
+   Shadow DOM bị bỏ qua hoàn toàn — chỉ có font set của document mới được dùng
+   để so khớp. Trước đây file này có 7 khối @font-face và chúng chưa bao giờ
+   có tác dụng: mọi ngăn xếp phông lặng lẽ rơi về phông hệ thống, mà không báo
+   lỗi gì. Giờ phông được nạp bằng FontFace API rồi thêm vào document.fonts —
+   xem loadFonts() trong content/reader.js.                                  */
 
-@font-face {
-  font-family: "Lamp Vietnam";
-  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Vietnam";
-  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-SemiBold.ttf") format("truetype");
-  font-weight: 600;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Vietnam";
-  src: url("__LAMP_EXT__fonts/Be_Vietnam_Pro/BeVietnamPro-Bold.ttf") format("truetype");
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Serif";
-  src: url("__LAMP_EXT__fonts/Literata/Literata-VariableFont_opsz,wght.ttf") format("truetype");
-  font-weight: 100 900;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Serif";
-  font-style: italic;
-  src: url("__LAMP_EXT__fonts/Literata/Literata-Italic-VariableFont_opsz,wght.ttf") format("truetype");
-  font-weight: 100 900;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Noto Serif";
-  src: url("__LAMP_EXT__fonts/Noto_Serif/NotoSerif-VariableFont_wdth,wght.ttf") format("truetype");
-  font-weight: 100 900;
-  font-display: swap;
-}
-@font-face {
-  font-family: "Lamp Noto Serif";
-  font-style: italic;
-  src: url("__LAMP_EXT__fonts/Noto_Serif/NotoSerif-Italic-VariableFont_wdth,wght.ttf") format("truetype");
-  font-weight: 100 900;
-  font-display: swap;
-}
 
 /* ==================== Focus view — hiện toàn văn khi dừng ====================
    Chỉ dùng ở chế độ RSVP. Đè lên trên từ đơn khi đang dừng, để người đọc

@@ -82,8 +82,8 @@ fetch("../lamp-reader/popup/popup.html").then(r => r.text()).then(html => {
   <\/script>`;
 
   html = html.replace("<body>", "<body>" + stub)
-             .replace('src="../content/defaults.js"', 'src="../lamp-reader/content/defaults.js"')
-             .replace('src="popup.js"', 'src="../lamp-reader/popup/popup.js"');
+             .replace('src="../content/defaults.js"', 'src="../lamp-reader/content/defaults.js?v=' + Date.now() + '"')
+             .replace('src="popup.js"', 'src="../lamp-reader/popup/popup.js?v=' + Date.now() + '"');
   document.getElementById("frame").srcdoc = html;
 });
 

@@ -3,6 +3,7 @@
 // không dùng được biến toàn cục pdfjsLib như các bản UMD đời cũ.
 
 import { getDocument, GlobalWorkerOptions } from "../vendor/pdf.mjs";
+import { pagesToBlocks } from "../content/pdftext.js";
 
 GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("vendor/pdf.worker.mjs");
 
@@ -28,70 +29,12 @@ function setProgress(done, total) {
 
 // ---------- Trích xuất văn bản ----------
 
-// pdf.js trả về từng mảnh chữ kèm cờ hasEOL (hết dòng) và toạ độ.
-// Dùng cả hai để dựng lại dòng, rồi ghép dòng thành đoạn văn.
-function itemsToParagraphs(items) {
-  const lines = [];
-  let current = [];
-  let lastY = null;
 
-  for (const item of items) {
-    if (typeof item.str !== "string") continue;
-    const y = item.transform ? item.transform[5] : null;
 
-    const newLineByGap = lastY !== null && y !== null && Math.abs(y - lastY) > 2;
-    if (newLineByGap && current.length) {
-      lines.push(current.join(""));
-      current = [];
-    }
-
-    current.push(item.str);
-    if (y !== null) lastY = y;
-
-    if (item.hasEOL) {
-      lines.push(current.join(""));
-      current = [];
-      lastY = null;
-    }
-  }
-  if (current.length) lines.push(current.join(""));
-
-  const paragraphs = [];
-  let buffer = "";
-  for (let line of lines) {
-    line = line.replace(/\s+/g, " ").trim();
-    if (!line) {
-      if (buffer) { paragraphs.push(buffer); buffer = ""; }
-      continue;
-    }
-    // Nối từ bị gạch nối cuối dòng
-    if (buffer.endsWith("-")) buffer = buffer.slice(0, -1) + line;
-    else buffer = buffer ? buffer + " " + line : line;
-
-    if (/[.!?:;]["')\]]?$/.test(line)) {
-      paragraphs.push(buffer);
-      buffer = "";
-    }
-  }
-  if (buffer) paragraphs.push(buffer);
-  return paragraphs;
-}
-
-// Bỏ header/footer lặp lại giống nhau ở phần lớn số trang
-function dropRepeats(pages) {
-  if (pages.length < 4) return pages;
-  const counts = new Map();
-  pages.forEach((paras) => {
-    new Set(paras.map((p) => p.slice(0, 60))).forEach((key) => {
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
-  });
-  const threshold = Math.max(3, Math.ceil(pages.length * 0.5));
-  return pages.map((paras) =>
-    paras.filter((p) => (counts.get(p.slice(0, 60)) || 0) < threshold)
-  );
-}
-
+// source phải là OBJECT: { data } cho file trên máy, { url } cho đường dẫn mạng.
+// pdf.js v6 không còn nhận chuỗi URL trần như các bản cũ — truyền chuỗi vào là
+// nó ném "expected either `data`, `range`, or `url` parameter", và vì lỗi này
+// rơi vào catch chung nên người dùng chỉ thấy thông báo đổ cho quyền truy cập.
 async function extractPdf(source) {
   const pdf = await getDocument(source).promise;
   const pages = [];
@@ -99,46 +42,35 @@ async function extractPdf(source) {
     setStatus(`Đang trích xuất trang ${p}/${pdf.numPages}…`);
     setProgress(p, pdf.numPages);
     const page = await pdf.getPage(p);
-    const content = await page.getTextContent();
-    pages.push(itemsToParagraphs(content.items));
+    const vp = page.getViewport({ scale: 1 });
+    pages.push({
+      items: (await page.getTextContent()).items,
+      width: vp.width, height: vp.height
+    });
     page.cleanup();
   }
-  const text = dropRepeats(pages)
-    .map((paras) => paras.join("\n\n"))
-    .join("\n\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return { text, numPages: pdf.numPages };
+  // pagesToBlocks lo phần dựng lại cấu trúc: gom dòng, tách cột, bỏ số trang
+  // và header lặp, ghép đoạn, nhận tiêu đề theo cỡ chữ thật.
+  return { blocks: pagesToBlocks(pages), numPages: pdf.numPages };
 }
 
 // ---------- Mở trình đọc ----------
 
-async function startReading(text, title) {
-  if (!text || text.replace(/\s/g, "").length < 40) {
+async function startReading(blocks, title) {
+  const chars = blocks.reduce((n, b) => n + b.text.replace(/\s/g, "").length, 0);
+  if (chars < 40) {
     setStatus(
       "Không tìm thấy lớp chữ trong PDF này — nhiều khả năng đây là bản quét ảnh, cần OCR để đọc được.",
       true
     );
     return;
   }
-
-  if (!window.__lampReader) {
-    setStatus("Không nạp được trình đọc (content/reader.js).", true);
-    return;
-  }
-
-  // reader.js lấy nội dung qua window.__lampExtract() — cung cấp sẵn kết quả PDF
-  const blocks = text
-    .split(/\n{2,}/)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 2)
-    .map((s) => ({ type: s.length < 70 && !/[.!?]$/.test(s) ? "h" : "p", text: s }));
-  await openReaderWith(blocks, title);
+  await startReadingBlocks(blocks, title);
 }
 
 // Dùng chung cho PDF (đã tách khối thô) và EPUB (đã có khối đúng cấu trúc)
-async function openReaderWith(blocks, title) {
-  window.__lampExtract = () => ({ title, source: "pdf", blocks });
+async function openReaderWith(blocks, title, lang) {
+  window.__lampExtract = () => ({ title, source: "pdf", blocks, lang });
 
   // Lấy TOÀN BỘ cài đặt đã lưu. Bản cũ chỉ hỏi 4 khoá, trong đó
   // "pausePunctuation" còn không phải tên thật của tuỳ chọn nào (đúng ra là
@@ -151,18 +83,18 @@ async function openReaderWith(blocks, title) {
   setStatus(`Đang đọc ${words.toLocaleString("vi-VN")} từ. Nhấn Esc để quay lại.`);
 }
 
-async function startReadingBlocks(blocks, title) {
+async function startReadingBlocks(blocks, title, lang) {
   if (!window.__lampReader) {
     setStatus("Không nạp được trình đọc (content/reader.js).", true);
     return;
   }
-  await openReaderWith(blocks, title);
+  await openReaderWith(blocks, title, lang);
 }
 
 async function handleEpub(file) {
   setStatus("Đang mở EPUB…");
   const buf = await file.arrayBuffer();
-  const { title, blocks, chapters } = await window.__lampEpub.parse(buf, (i, n) => {
+  const { title, lang, blocks, chapters } = await window.__lampEpub.parse(buf, (i, n) => {
     setStatus(`Đang đọc chương ${i}/${n}…`);
     setProgress(i, n);
   });
@@ -170,7 +102,7 @@ async function handleEpub(file) {
   setStatus(`Đã đọc ${chapters} chương.`);
   // EPUB đã cho sẵn khối có cấu trúc (tiêu đề/đoạn/danh sách) nên đưa thẳng
   // vào trình đọc, không phải đi qua bước tách đoạn thô như PDF.
-  await startReadingBlocks(blocks, title || file.name);
+  await startReadingBlocks(blocks, title || file.name, lang);
 }
 
 async function handleFile(file) {
@@ -185,10 +117,10 @@ async function handleFile(file) {
     if (isEpub) { await handleEpub(file); return; }
     setStatus("Đang mở file…");
     const buf = await file.arrayBuffer();
-    const { text, numPages } = await extractPdf({ data: buf });
+    const { blocks, numPages } = await extractPdf({ data: buf });
     setStatus(`Đã trích xuất ${numPages} trang.`);
     setProgress(0, 0);
-    await startReading(text, file.name);
+    await startReading(blocks, file.name);
   } catch (err) {
     setProgress(0, 0);
     setStatus("Không đọc được file này: " + err.message, true);
@@ -224,10 +156,10 @@ dropEl.addEventListener("drop", (e) => {
 async function loadRemotePdf(target) {
   setStatus("Đang tải PDF từ đường dẫn…");
   try {
-    const { text, numPages } = await extractPdf(target);
+    const { blocks, numPages } = await extractPdf({ url: target });
     setStatus(`Đã trích xuất ${numPages} trang.`);
     setProgress(0, 0);
-    await startReading(text, decodeURIComponent(target.split("/").pop()));
+    await startReading(blocks, decodeURIComponent(target.split("/").pop()));
     return true;
   } catch (err) {
     setProgress(0, 0);

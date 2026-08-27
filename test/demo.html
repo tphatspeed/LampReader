@@ -45,10 +45,16 @@ window.chrome = {
   }
 };
 </script>
-<script src="../lamp-reader/content/defaults.js"></script>
-<script src="../lamp-reader/content/extractor.js"></script>
-<script src="../lamp-reader/content/engine.js"></script>
-<script src="../lamp-reader/content/reader.js"></script>
+<script>
+// Nạp mã nguồn kèm dấu thời gian để trình duyệt KHÔNG dùng bản cache cũ.
+// Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
+(function () {
+  var v = Date.now();
+  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
+    document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
+  });
+})();
+</script>
 <script>
   window.addEventListener("load", () => setTimeout(() => window.__lampReader.open({}), 100));
 </script>
