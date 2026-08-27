@@ -11,3 +11,5 @@
 *.zip
 lamp-reader.crx
 lamp-reader.pem
+lamp-reader/.DS_Store
+.DS_Store
