@@ -45,6 +45,7 @@
     open: false,
     docKey: null,
     prevOverflow: "",
+    prevFocus: null,
     // thống kê phiên
     sessionStart: 0,
     activeMs: 0,
@@ -86,22 +87,10 @@
     return 4;
   }
 
-  // Bionic: in đậm khoảng 45% đầu mỗi từ — mắt chỉ cần bắt phần đầu, não tự
-  // đoán phần còn lại. Thay thế cho ORP (tô một điểm neo) chứ không cộng dồn.
-  function bionicSplit(n) {
-    if (n <= 1) return n;
-    if (n <= 3) return Math.ceil(n / 2);
-    return Math.ceil(n * 0.45);
-  }
-  function bionicHTML(w) {
-    const n = bionicSplit(w.length);
-    return `<b class="bionic">${esc(w.slice(0, n))}</b>${esc(w.slice(n))}`;
-  }
-
   // Tách dấu ngoặc/ngoặc kép/dấu câu bám ở đầu-cuối ra khỏi phần "lõi" của
-  // từ — để tính điểm neo (ORP) và độ đậm Bionic đúng vào chữ cái thật thay
-  // vì lệch bởi dấu, và để tô nhạt riêng phần dấu khi hiển thị. Dấu ngoặc dễ
-  // lẫn vào nội dung khi đọc nhanh; tô nhạt giúp mắt bỏ qua chúng dễ hơn.
+  // từ — để điểm neo (ORP) rơi đúng vào chữ cái thật thay vì lệch bởi dấu,
+  // và để tô nhạt riêng phần dấu khi hiển thị. Dấu ngoặc dễ lẫn vào nội dung
+  // khi đọc nhanh; tô nhạt giúp mắt bỏ qua chúng dễ hơn.
   function splitWord(w) {
     const m = w.match(/^([([{"'“‘«]*)(.*?)([)\]}"'”’»,.;:!?…]*)$/);
     if (!m || !m[2]) return { lead: "", core: w, trail: "" };
@@ -161,7 +150,7 @@
     };
 
     return `
-      <div class="backdrop" data-theme="${state.theme}">
+      <div class="backdrop" data-theme="${state.theme}" tabindex="-1">
 
         <div class="topbar">
           <div class="doc-title" id="docTitle"></div>
@@ -247,7 +236,6 @@
             </div>
             <div class="group">
               ${toggle("orp", "Tô chữ trung tâm", "Điểm neo mắt, giúp nhận diện từ nhanh hơn")}
-              ${toggle("bionic", "Chế độ Bionic", "In đậm nửa đầu mỗi từ, thay cho tô điểm neo")}
               ${toggle("ruler", "Thanh dẫn", "Hai vạch canh vị trí mắt")}
               ${toggle("rhythm", "Nhịp dấu câu", "Dừng lâu hơn ở cuối câu, câu dài dừng lâu hơn")}
               ${toggle("shortWords", "Bỏ qua từ ngắn", "Từ đệm như “và”, “của”, “là” lướt nhanh hơn")}
@@ -290,6 +278,12 @@
     const host = document.createElement("div");
     host.id = "lamp-reader-host";
     host.style.cssText = "all: initial; position: fixed; inset: 0; z-index: 2147483647;";
+    // Overlay che kín trang nhưng trước đây không tự khai báo là hộp thoại,
+    // nên trình đọc màn hình vẫn đọc nội dung trang phía sau như thể không có
+    // gì che. aria-modal cắt hẳn phần đó ra khỏi cây trợ năng.
+    host.setAttribute("role", "dialog");
+    host.setAttribute("aria-modal", "true");
+    host.setAttribute("aria-label", "Lamp — trình đọc nhanh");
     const root = host.attachShadow({ mode: "open" });
 
     let css = "";
@@ -408,7 +402,7 @@
       applyStyle(); syncControls(); save();
     });
 
-    ["orp", "bionic", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach((k) =>
+    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach((k) =>
       $("#" + k).addEventListener("change", (e) => {
         state[k] = e.target.checked;
         if (k === "tts") { stopSpeech(); syncControls(); if (state.playing) { pause(); play(); } }
@@ -446,6 +440,12 @@
     ["#sheet", "#outline", "#quiz"].forEach((s) => makeDraggable($(s)));
 
     document.addEventListener("keydown", onKey, true);
+    // Đóng tab hay chuyển sang tab khác: ghi ngay phần đang chờ, kẻo mất
+    // tiến trình đọc vừa rồi. pagehide đáng tin hơn unload trên Chrome.
+    window.addEventListener("pagehide", flushWrites);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushWrites();
+    });
   }
 
   // Kéo bảng theo thanh tiêu đề — chủ yếu để kéo bảng Cài đặt sang một bên
@@ -674,7 +674,6 @@
     const bd = $(".backdrop");
     bd.dataset.theme = state.theme;
     bd.dataset.orp = state.orp ? "on" : "off";
-    bd.dataset.bionic = state.bionic ? "on" : "off";
     bd.dataset.ruler = state.ruler ? "on" : "off";
     const stack = state.fontFamily === "custom"
       ? (state.customFont ? `"${state.customFont}", system-ui, sans-serif` : "system-ui, sans-serif")
@@ -696,7 +695,7 @@
     $$("[data-font]").forEach((b) => b.classList.toggle("on", b.dataset.font === state.fontFamily));
     $$("[data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === state.theme));
     $$("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
-    ["orp", "bionic", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach(
+    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach(
       (k) => ($("#" + k).checked = state[k])
     );
   }
@@ -710,9 +709,7 @@
       const first = parts[0] || "";
       const { lead, core, trail } = splitWord(first);
       let coreHTML;
-      if (state.bionic) {
-        coreHTML = bionicHTML(core);
-      } else if (state.orp) {
+      if (state.orp) {
         const pi = pivotIndex(core);
         coreHTML = esc(core.slice(0, pi)) +
           `<span class="pivot">${esc(core.slice(pi, pi + 1))}</span>` +
@@ -1129,25 +1126,48 @@
 
   // ============================ LƯU TRỮ ============================
 
-  function save() {
+  // Gộp nhiều lượt ghi liên tiếp thành một. Lý do bắt buộc phải có:
+  // chrome.storage.sync chỉ cho 120 lượt ghi mỗi phút, mà giữ phím ↑/↓ để
+  // chỉnh tốc độ thì bàn phím tự lặp ~30 lần/giây — chưa tới 5 giây là vượt
+  // hạn mức, Chrome bắt đầu từ chối và cài đặt lặng lẽ không được lưu nữa.
+  // Kéo thanh tiến độ cũng bắn ra hàng trăm lượt ghi tiến trình tương tự.
+  function debounce(fn, ms) {
+    let timer = null;
+    const run = () => { timer = null; fn(); };
+    const wrapped = () => { clearTimeout(timer); timer = setTimeout(run, ms); };
+    // flush(): ghi ngay lập tức — dùng khi đóng trình đọc hoặc rời trang,
+    // lúc đó không còn cơ hội chờ hết thời gian gộp nữa.
+    wrapped.flush = () => { if (timer) { clearTimeout(timer); run(); } };
+    return wrapped;
+  }
+
+  // Hạn mức bị vượt hay storage bị chặn thì chỉ mất một lần lưu — không đáng
+  // để ném lỗi chưa bắt ra console của trang người dùng.
+  const quiet = (p) => Promise.resolve(p).catch(() => {});
+
+  function writeSettings() {
     const out = {};
     Object.keys(DEFAULTS).forEach((k) => (out[k] = state[k]));
-    chrome.storage.sync.set(out);
+    quiet(chrome.storage.sync.set(out));
   }
+  const save = debounce(writeSettings, 400);
 
   // Lưu vị trí theo (khối, từ) chứ không theo chỉ số token: token phụ thuộc
   // "số từ mỗi lần", nên bản cũ lưu theo token thì chỉ cần đổi chunkSize là
   // mất sạch tiến trình. Toạ độ (khối, từ) không đổi theo chunkSize.
-  function saveProgress() {
+  function writeProgress() {
     if (!state.docKey) return;
     const t = state.tokens[state.idx];
     if (!t) return;
-    chrome.storage.local.set({
+    quiet(chrome.storage.local.set({
       ["pos:" + state.docKey]: {
         block: t.block, word: t.from, blocks: state.blocks.length, at: Date.now()
       }
-    });
+    }));
   }
+  const saveProgress = debounce(writeProgress, 500);
+
+  function flushWrites() { save.flush(); saveProgress.flush(); }
 
   async function loadProgress() {
     if (!state.docKey) return 0;
@@ -1236,15 +1256,24 @@
     // Không tự chạy — chờ người dùng nhấn Space hoặc nút phát
     state.prevOverflow = document.documentElement.style.overflow;
     document.documentElement.style.overflow = "hidden";
+
+    // Đặt focus vào chính overlay (không phải vào một nút — bấm Space khi nút
+    // đang focus sẽ vừa kích hoạt nút vừa chạy phím tắt). Nhờ vậy Tab tiếp
+    // theo đi vào các nút trong overlay thay vì rơi xuống trang phía sau.
+    state.prevFocus = document.activeElement;
+    $(".backdrop").focus({ preventScroll: true });
   }
 
   function close() {
     pause();
     endRest();
     recordSession();
+    flushWrites();
     state.open = false;
     if (state.host) state.host.style.display = "none";
     document.documentElement.style.overflow = state.prevOverflow || "";
+    // Trả con trỏ bàn phím về đúng chỗ người dùng đang đứng trước khi mở
+    try { state.prevFocus && state.prevFocus.focus({ preventScroll: true }); } catch (e) {}
   }
 
   window.__lampReader = {

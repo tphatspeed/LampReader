@@ -106,6 +106,9 @@
 .round:hover { border-color: var(--accent); background: var(--raise); }
 .round.sm { width: 36px; height: 36px; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Overlay nhận focus khi mở (để Tab không rơi xuống trang phía sau) nhưng
+   bản thân nó không cần viền — chỉ các nút bên trong mới cần. */
+.backdrop:focus { outline: none; }
 
 /* ---------- Hàng 2: vùng chữ ---------- */
 
@@ -918,11 +921,6 @@ kbd {
   font-weight: 100 900;
   font-display: swap;
 }
-
-/* ==================== Bionic — in đậm nửa đầu mỗi từ ==================== */
-
-.backdrop[data-bionic="on"] .word { font-weight: 400; }
-.word .bionic { font-weight: 800; }
 
 /* ==================== Focus view — hiện toàn văn khi dừng ====================
    Chỉ dùng ở chế độ RSVP. Đè lên trên từ đơn khi đang dừng, để người đọc

@@ -147,5 +147,4 @@ Sau mỗi lần sửa: vào `chrome://extensions` → bấm **Reload** trên th�
 - **Text-to-speech**: dùng Web Speech API (`speechSynthesis`) để nghe song song.
 - **Lưu tiến trình**: ghi `{url, idx}` vào `chrome.storage.local`, đọc tiếp lần sau.
 - **Thống kê**: đếm tổng số từ đã đọc mỗi ngày, hiển thị trong popup.
-- **Chế độ bionic**: in đậm nửa đầu mỗi từ thay vì chỉ tô một ký tự.
 - **Bỏ qua từ ngắn**: các từ như "và", "của", "là" hiển thị nhanh hơn.

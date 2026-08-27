@@ -28,7 +28,6 @@
     tts: false,
     voiceURI: "",
     restReminder: true,
-    bionic: false,
     shortWords: false
   };
 

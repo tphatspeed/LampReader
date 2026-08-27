@@ -7,7 +7,12 @@ const DEFAULTS = self.LAMP_DEFAULTS;
 
 const MENU_ID = "lamp-read-selection";
 
+// Tuỳ chọn đã gỡ khỏi ứng dụng — xoá luôn khỏi storage để không tồn đọng
+// những khoá không còn ai đọc tới.
+const RETIRED_KEYS = ["bionic"];
+
 chrome.runtime.onInstalled.addListener(async () => {
+  await chrome.storage.sync.remove(RETIRED_KEYS);
   const stored = await chrome.storage.sync.get(DEFAULTS);
   await chrome.storage.sync.set({ ...DEFAULTS, ...stored });
 

@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Trình soạn thảo
+.vscode/
+.idea/
+*.swp
+
+# Bản đóng gói để tải lên Chrome Web Store
+*.zip
+lamp-reader.crx
+lamp-reader.pem

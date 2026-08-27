@@ -58,6 +58,9 @@ Ba nút `−` / `+` ngay dưới nút phát chỉnh **tốc độ** (bước 50 
 (1–6) và **cỡ chữ** (24–120px). Vị trí đọc được lưu tự động theo từng trang, mở lại
 là đọc tiếp chỗ cũ.
 
+Dùng `Tab` để chọn thanh tiến độ rồi lái bằng `←` `→` `PageUp` `PageDown` `Home`
+`End` — toàn bộ trình đọc điều khiển được bằng bàn phím, không cần chuột.
+
 ### Hai chế độ đọc
 
 | Chế độ | Cách hoạt động | Nên dùng khi |
@@ -81,9 +84,6 @@ Liệt kê toàn bộ tiêu đề mục của trang kèm vị trí phần trăm,
 (h1/h2/h3 → 3 mức), và đánh dấu mục bạn đang đọc. Bấm vào là nhảy thẳng tới đó.
 Bù lại phần cấu trúc văn bản mà RSVP xoá mất.
 
-Phím `Home` / `End` / `PageUp` / `PageDown` điều khiển được thanh tiến độ khi nó
-đang được chọn (Tab tới) — dùng được hoàn toàn bằng bàn phím.
-
 ### Kiểm tra hiểu (phím `Q`)
 
 Đọc xong sẽ tự hiện, hoặc bấm `Q` bất cứ lúc nào. Ứng dụng khoét một từ khỏi năm
@@ -104,7 +104,6 @@ bên hoặc lên trên để vẫn nhìn thấy chữ đang đọc trong lúc ch
 - **Giãn chữ** — nới khoảng cách giữa các ký tự, 0–12px
 - **Giọng đọc** — bật text-to-speech, chữ chạy theo giọng qua sự kiện `onboundary`; chọn được giọng, tự ưu tiên giọng cùng ngôn ngữ với bài
 - **Tô chữ trung tâm (ORP)** — điểm neo mắt, có thêm gạch chân nên không phụ thuộc riêng vào màu
-- **Chế độ Bionic** — in đậm khoảng 45% đầu mỗi từ thay cho tô điểm neo, mắt bắt phần đầu rồi não tự đoán phần còn lại
 - **Thanh dẫn** — hai vạch canh vị trí mắt
 - **Nhịp dấu câu** — dừng cuối câu, câu càng dài dừng càng lâu
 - **Bỏ qua từ ngắn** — từ đệm ít nghĩa (và, của, là...) hiện nhanh hơn 40%, dồn thời gian cho từ mang nội dung
@@ -116,11 +115,11 @@ bên hoặc lên trên để vẫn nhìn thấy chữ đang đọc trong lúc ch
 ### Ngoặc, ngoặc kép, dấu câu
 
 Dấu `()`, `""`, `“”` bám ở đầu/cuối một từ được tách ra và tô nhạt hơn (ở mọi
-chế độ) để mắt lướt qua nhanh, không lẫn vào nội dung chính — và không làm
-lệch điểm neo ORP/độ đậm Bionic vào đúng dấu thay vì chữ cái. Ở RSVP, từ mở
-hoặc đóng một đoạn trong ngoặc/trích dẫn được giữ lại lâu hơn một nhịp, để
-kịp nhận ra đây là phần chú thích chứ không phải mạch câu chính. Không áp
-dụng cho dấu nháy đơn giữa từ (như "don't") để khỏi làm chậm nhầm từ viết tắt.
+chế độ) để mắt lướt qua nhanh, không lẫn vào nội dung chính — và để điểm neo
+ORP rơi đúng vào chữ cái chứ không rơi trúng dấu. Ở RSVP, từ mở hoặc đóng một
+đoạn trong ngoặc/trích dẫn được giữ lại lâu hơn một nhịp, để kịp nhận ra đây
+là phần chú thích chứ không phải mạch câu chính. Không áp dụng cho dấu nháy
+đơn giữa từ (như "don't") để khỏi làm chậm nhầm từ viết tắt.
 
 ### Tiếng Việt
 
@@ -177,22 +176,32 @@ lamp-reader/
 └── icons/
 
 test/                      # Chỉ dùng khi phát triển, KHÔNG nằm trong extension
-├── harness.html           # 50 phép kiểm thử tích hợp, chạy thật trong trình duyệt
+├── engine.test.js         # 53 phép kiểm thử engine (chạy bằng node, không cần trình duyệt)
+├── harness.html           # 56 phép kiểm thử tích hợp, chạy thật trong trình duyệt
 └── demo.html              # Bài viết mẫu để xem nhanh giao diện
 ```
 
 ### Chạy kiểm thử
 
-Thư mục `test/` cần được phục vụ qua HTTP (mở thẳng bằng `file://` sẽ bị chặn
-khi nạp CSS). Từ thư mục gốc của dự án:
+Phần logic thuần chạy thẳng bằng node, không cần trình duyệt:
+
+```bash
+node test/engine.test.js
+```
+
+Phần tích hợp cần được phục vụ qua HTTP (mở thẳng bằng `file://` sẽ bị chặn khi
+nạp CSS). Từ thư mục gốc của dự án:
 
 ```bash
 python3 -m http.server 8899
 ```
 
-Rồi mở `http://localhost:8899/test/harness.html` — trang tự chạy và in ra
-số phép kiểm thử đạt/hỏng. `test/demo.html` mở sẵn trình đọc trên một bài mẫu
-để xem nhanh giao diện mà không cần cài extension.
+Rồi mở `http://localhost:8899/test/harness.html` — trang tự nạp đúng các file
+trong `lamp-reader/` (chỉ giả lập API `chrome`), tự lái giao diện và in ra số
+phép kiểm thử đạt/hỏng. `test/demo.html` mở sẵn trình đọc trên một bài mẫu để
+xem nhanh giao diện mà không cần cài extension.
+
+Nếu sửa code mà kết quả không đổi, thêm `?cb=1` vào URL để bỏ qua cache.
 
 ## Muốn sửa gì thì sửa ở đâu
 
@@ -203,7 +212,7 @@ số phép kiểm thử đạt/hỏng. `test/demo.html` mở sẵn trình đọc
 | Loại khối (tiêu đề/đoạn/danh sách) | `content/extractor.js`, hàm `blockType` |
 | Cách tô sáng chạy theo chữ | `content/reader.js`, hàm `highlightInto` |
 | Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
-| Vị trí chấm ORP / độ dài bôi đậm Bionic | `content/reader.js`, hàm `pivotIndex` / `bionicSplit` |
+| Vị trí chấm ORP | `content/reader.js`, hàm `pivotIndex` |
 | Nội dung focus view khi RSVP dừng | `content/reader.js`, hàm `updateFocusOverlay`, `paintBlocksInto` |
 | Phông chữ nhúng sẵn (Be Vietnam, Serif, Noto Serif) | `content/overlay.css`, các khối `@font-face`; xem `fonts/README.txt` |
 | Kiểm tra phông có nạp được không | `content/reader.js`, hàm `checkFonts` |

@@ -39,14 +39,15 @@ const pick = (bag, q) => {
   if (Array.isArray(q)) { const o = {}; q.forEach(k => { if (k in bag) o[k] = bag[k]; }); return o; }
   const o = {}; Object.keys(q).forEach(k => (o[k] = k in bag ? bag[k] : q[k])); return o;
 };
+window.__writes = { sync: 0, local: 0 };
 window.chrome = {
   runtime: {
     getURL: (p) => "../lamp-reader/" + p + (p.endsWith(".css") ? "?v=" + Date.now() : ""),
     onMessage: { addListener() {} }
   },
   storage: {
-    sync:  { get: async (q) => pick(store.sync, q),  set: async (o) => Object.assign(store.sync, o) },
-    local: { get: async (q) => pick(store.local, q), set: async (o) => Object.assign(store.local, o) }
+    sync:  { get: async (q) => pick(store.sync, q),  set: async (o) => { window.__writes.sync++; Object.assign(store.sync, o); } },
+    local: { get: async (q) => pick(store.local, q), set: async (o) => { window.__writes.local++; Object.assign(store.local, o); } }
   }
 };
 </script>
@@ -210,6 +211,26 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   }
   $("#quizClose").click();
   await wait(40);
+
+  head("gộp lượt ghi storage (hạn mức sync là 120/phút)");
+  const before = window.__writes.sync;
+  // giả lập giữ phím ↑: 40 lần bump liên tiếp
+  for (let i = 0; i < 40; i++) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+  }
+  const during = window.__writes.sync - before;
+  ok("80 lần chỉnh liên tiếp không ghi ngay lập tức", during === 0, `đã ghi ${during} lần`);
+  await wait(600);
+  const after = window.__writes.sync - before;
+  ok("gộp lại thành đúng 1 lượt ghi", after === 1, `đã ghi ${after} lần`);
+
+  head("trợ năng: overlay là hộp thoại");
+  const hostEl = document.getElementById("lamp-reader-host");
+  ok("có role=dialog", hostEl.getAttribute("role") === "dialog");
+  ok("có aria-modal=true", hostEl.getAttribute("aria-modal") === "true");
+  ok("có aria-label", !!hostEl.getAttribute("aria-label"));
+  ok("focus nằm trong overlay khi mở", R().activeElement !== null);
 
   head("thống kê không bị cộng trùng (lỗi cũ)");
   store.local.stats = undefined;
