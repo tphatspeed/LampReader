@@ -126,8 +126,19 @@
   }
 
   // ---------- Câu hỏi kiểm tra ----------
-  // Sinh tại chỗ, không cần mạng: khoét một từ nội dung khỏi câu vừa đọc
-  // rồi lấy 3 phương án nhiễu là các từ khác cùng độ dài trong bài.
+  //
+  // Sinh hoàn toàn tại chỗ, không gọi mạng. Có NĂM dạng câu hỏi thay vì chỉ
+  // điền từ, vì chỉ khoét một từ thì phần lớn câu đoán được bằng ngữ pháp mà
+  // không cần nhớ bài — người đọc thấy "dễ và hời hợt" là đúng.
+  //
+  //   cloze     — điền từ còn thiếu (dạng cũ, đã siết lại phần nhiễu)
+  //   number    — điền con số còn thiếu, nhiễu là số bị bóp méo hợp lý
+  //   whichtrue — bốn câu gần giống nhau, chọn câu ĐÚNG với bài
+  //   mainidea  — mục này nói về điều gì (cần dàn bài)
+  //   order     — ý nào được nhắc tới trước nhất
+  //
+  // Ba dạng sau không thể đoán bằng ngữ pháp: phải thật sự nhớ nội dung.
+
   const STOP = new Set(("và là của có được cho những các một trong với khi này đó thì mà nhưng " +
     "để từ như về vì nên hay hoặc cũng đã sẽ đang rất nhiều ít không phải bị bởi tại trên dưới " +
     "the a an and or but of to in on for with that this these those is are was were be been " +
@@ -141,31 +152,47 @@
     return c.length >= 4 && !STOP.has(c.toLowerCase()) && /\p{L}/u.test(c);
   }
 
-  // `from` cho phép hỏi riêng MỘT KHOẢNG vừa đọc (chế độ luyện tốc độ hỏi
-  // từng vòng), thay vì luôn hỏi từ đầu bài. Mặc định 0 = giữ nguyên hành vi cũ.
-  function buildQuiz(tokens, upTo, count = 5, vietnamese = false, from = 0) {
+  const shuffle = (a) => a.slice().sort(() => Math.random() - 0.5);
+  const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trim() + "…" : t);
+
+  // ---- Ngữ cảnh dùng chung cho mọi dạng câu hỏi ----
+  function quizContext(tokens, upTo, vietnamese, from, blocks) {
     const start = Math.max(0, Math.min(from, tokens.length - 1));
     const read = tokens.slice(start, Math.max(start + 1, upTo + 1));
+    if (!read.length) return null;
 
-    // Gom theo token thay vì tách chuỗi phẳng, để giữ lại vị trí token đầu
-    // câu — cần cho nút "Xem lại đoạn này" khi ôn câu trả lời sai.
+    // Gom theo token để giữ vị trí — cần cho nút "Xem lại đoạn này"
     const sentences = [];
     let buf = [], startIdx = 0;
+    const flushSentence = () => {
+      if (!buf.length) return;
+      const text = buf.map((x) => x.text).join(" ").trim();
+      const words = text.split(/\s+/);
+      if (words.length >= 8 && words.length <= 45) {
+        sentences.push({ text, words, token: start + startIdx, block: buf[0].block });
+      }
+      buf = [];
+    };
     read.forEach((t, i) => {
+      // KHÔNG cho một câu vắt qua ranh giới khối. Tiêu đề không có dấu chấm,
+      // nên nếu không chặn thì tiêu đề dính luôn vào câu đầu của đoạn ngay
+      // sau nó — và câu hỏi "Mục X mở đầu bằng ý nào?" sẽ có đáp án chứa
+      // sẵn tên mục X, đoán một phát là ra.
+      if (buf.length && t.block !== buf[0].block) flushSentence();
       if (!buf.length) startIdx = i;
       buf.push(t);
-      if (CLAUSE_END.test(t.text) || i === read.length - 1) {
-        const text = buf.map((x) => x.text).join(" ");
-        const words = text.split(/\s+/);
-        // startIdx là chỉ số trong `read`; cộng `start` để ra chỉ số thật
-        // trong mảng tokens gốc, nếu không nút "Xem lại đoạn này" sẽ nhảy sai.
-        if (words.length >= 9 && words.length <= 45) sentences.push({ text, words, token: start + startIdx });
-        buf = [];
-      }
+      if (CLAUSE_END.test(t.text) || i === read.length - 1) flushSentence();
     });
-    if (sentences.length < 3) return [];
+    flushSentence();
+    // Tiêu đề là NHAN ĐỀ, không phải nội dung: khoét một từ khỏi tiêu đề bài
+    // thì câu hỏi vô nghĩa ("Trí tuệ ___ tạo và tương lai công việc"). Chỉ
+    // dạng "ý của mục" mới dùng tới tiêu đề, và nó lấy thẳng từ blocks.
+    const headBlocks = new Set(
+      (blocks || []).map((b, i) => (b.type === "h" ? i : -1)).filter((i) => i >= 0));
+    const body = sentences.filter((x) => !headBlocks.has(x.block));
+    if (body.length >= 3) sentences.length = 0, sentences.push(...body);
+    if (sentences.length < 3) return null;
 
-    // Kho từ nhiễu lấy từ toàn bài
     const fullText = read.map((t) => t.text).join(" ");
     const words0 = fullText.split(/\s+/);
     const single = words0.filter(isContentWord).map(clean);
@@ -177,95 +204,275 @@
         }, [])
       : [];
     const pool = [...new Set(vietnamese ? pairs.concat(single) : single)];
-    if (pool.length < 12) return [];
+    if (pool.length < 12) return null;
 
-    // Từ càng hiếm trong bài càng đáng làm đáp án — khoét từ lặp đi lặp lại
-    // nhiều lần chỉ kiểm tra trí nhớ mặt chữ, không kiểm tra đã nắm ý chưa.
     const freq = {};
     single.forEach((w) => { const k = w.toLowerCase(); freq[k] = (freq[k] || 0) + 1; });
 
-    // Rải câu hỏi đều khắp phần đã đọc thay vì dồn một chỗ
-    const picked = [];
-    const gap = Math.max(1, Math.floor(sentences.length / count));
-    for (let i = 0; i < sentences.length && picked.length < count; i += gap) {
-      picked.push(sentences[i]);
+    return { sentences, pool, freq, vietnamese, start };
+  }
+
+  // Rải đều các câu được chọn khắp phần đã đọc thay vì dồn một chỗ, nhưng
+  // trong mỗi khoảng thì lấy NGẪU NHIÊN — nhờ vậy làm lại bài kiểm tra sẽ ra
+  // bộ câu hỏi khác, thay vì lặp lại y hệt như bản trước.
+  function spread(list, n) {
+    if (list.length <= n) return shuffle(list);
+    const out = [];
+    const gap = list.length / n;
+    for (let i = 0; i < n; i++) {
+      const lo = Math.floor(i * gap);
+      const hi = Math.min(list.length - 1, Math.floor((i + 1) * gap) - 1);
+      out.push(list[lo + Math.floor(Math.random() * (hi - lo + 1))]);
     }
+    return out;
+  }
 
-    const used = new Set(); // tránh khoét cùng một từ ở hai câu hỏi khác nhau
-    const questions = [];
-    picked.forEach((sentence, qi) => {
+  // ---- Dạng 1: điền từ ----
+  function makeCloze(ctx, used) {
+    const { sentences, pool, freq, vietnamese } = ctx;
+    const out = [];
+    for (const sentence of spread(sentences, 8)) {
       const { words, token } = sentence;
-      const candidates = words
-        .map((w, i) => ({ w, i }))
-        .filter(({ w }) => isContentWord(w));
-      if (!candidates.length) return;
+      const cands = words.map((w, i) => ({ w, i })).filter(({ w }) => isContentWord(w));
+      if (!cands.length) continue;
 
-      // Ưu tiên ứng viên nằm giữa câu (tránh từ mở/kết câu, thường ít mang ý
-      // chính), trong số đó chọn từ hiếm nhất trong toàn bài
       const lo = Math.floor(words.length * 0.2), hi = Math.ceil(words.length * 0.8);
-      const central = candidates.filter((c) => c.i >= lo && c.i <= hi);
-      const ranked = (central.length ? central : candidates).slice().sort(
-        (a, b) => (freq[clean(a.w).toLowerCase()] || 1) - (freq[clean(b.w).toLowerCase()] || 1)
-      );
-      const target = ranked.find((c) => !used.has(clean(c.w).toLowerCase()));
-      if (!target) return;
+      const central = cands.filter((c) => c.i >= lo && c.i <= hi);
+      const ranked = (central.length ? central : cands).slice()
+        .sort((a, b) => (freq[clean(a.w).toLowerCase()] || 1) - (freq[clean(b.w).toLowerCase()] || 1));
+      // Lấy ngẫu nhiên trong nhóm hiếm nhất thay vì luôn lấy đúng từ hiếm nhất:
+      // vẫn giữ chất lượng câu hỏi mà mỗi lần làm lại ra từ khác.
+      const pickable = shuffle(ranked.slice(0, Math.max(3, Math.ceil(ranked.length / 2))));
+      const target = pickable.find((c) => !used.has(clean(c.w).toLowerCase()))
+                  || ranked.find((c) => !used.has(clean(c.w).toLowerCase()));
+      if (!target) continue;
 
-      // Tiếng Việt là ngôn ngữ đơn âm tiết: khoét một "từ" cách bởi dấu cách
-      // thường chỉ xoá nửa của một từ ghép ("trực" trong "trực quan"), khiến
-      // câu hỏi vừa dễ vừa kỳ. Với tiếng Việt ta khoét cả cụm hai âm tiết.
+      // Tiếng Việt đơn âm tiết: khoét cả cụm hai âm tiết, vì khoét "trực"
+      // trong "trực quan" thì câu hỏi vừa dễ vừa vô nghĩa.
       let span = 1;
       if (vietnamese) {
         const nxt = words[target.i + 1];
         if (nxt && isContentWord(nxt)) span = 2;
       }
+      const answer = words.slice(target.i, target.i + span).map(clean).join(" ");
+      if (!answer || used.has(answer.toLowerCase())) continue;
 
-      const answer = words
-        .slice(target.i, target.i + span)
-        .map(clean)
-        .join(" ");
-      if (used.has(answer.toLowerCase())) return;
-
-      // Nhiễu: cùng độ dài, KHÔNG xuất hiện trong chính câu đang hỏi (kẻo
-      // vừa gây rối vừa vô tình lộ đáp án), và ưu tiên cùng kiểu viết hoa
-      // với đáp án — để bốn phương án nhìn tự nhiên như nhau
-      const sentenceLower = sentence.text.toLowerCase();
-      const answerCapitalized = /^[A-ZÀ-Ỹ]/.test(answer);
-      const candidatesPool = pool.filter((w) => {
+      const low = sentence.text.toLowerCase();
+      const capd = /^[A-ZÀ-Ỹ]/.test(answer);
+      const cand = pool.filter((w) => {
         if (w.toLowerCase() === answer.toLowerCase()) return false;
         if (Math.abs(w.length - answer.length) > 4) return false;
-        if (sentenceLower.includes(w.toLowerCase())) return false;
+        if (low.includes(w.toLowerCase())) return false;
+        // Cùng số âm tiết: nhiễu một chữ cạnh đáp án hai chữ là lộ ngay
+        if (w.split(" ").length !== answer.split(" ").length) return false;
         return true;
+      }).sort((a, b) => {
+        const ca = /^[A-ZÀ-Ỹ]/.test(a) === capd ? 0 : 1;
+        const cb = /^[A-ZÀ-Ỹ]/.test(b) === capd ? 0 : 1;
+        return ca - cb || Math.abs(a.length - answer.length) - Math.abs(b.length - answer.length);
       });
-      candidatesPool.sort((a, b) => {
-        const capA = /^[A-ZÀ-Ỹ]/.test(a) === answerCapitalized ? 0 : 1;
-        const capB = /^[A-ZÀ-Ỹ]/.test(b) === answerCapitalized ? 0 : 1;
-        return capA - capB || Math.abs(a.length - answer.length) - Math.abs(b.length - answer.length);
-      });
-      const distractors = candidatesPool.slice(0, 8).sort(() => Math.random() - 0.5).slice(0, 3);
-      if (distractors.length < 3) return;
-
-      used.add(answer.toLowerCase());
+      const distractors = shuffle(cand.slice(0, 8)).slice(0, 3);
+      if (distractors.length < 3) continue;
 
       const blanked = words
-        .map((w, i) => {
-          if (i === target.i) return "______";
-          if (i > target.i && i < target.i + span) return null;
-          return w;
-        })
-        .filter((w) => w !== null)
-        .join(" ");
+        .map((w, i) => (i === target.i ? "______" : (i > target.i && i < target.i + span ? null : w)))
+        .filter((w) => w !== null).join(" ");
 
-      questions.push({
-        id: "q" + qi,
-        prompt: blanked,
-        answer,
-        options: [answer, ...distractors].sort(() => Math.random() - 0.5),
-        token,
-        sentence: sentence.text
+      used.add(answer.toLowerCase());
+      out.push({
+        kind: "cloze", label: "Điền từ",
+        prompt: blanked, answer,
+        options: shuffle([answer, ...distractors]),
+        token, sentence: sentence.text
       });
-    });
+    }
+    return out;
+  }
 
-    return questions;
+  // ---- Dạng 2: điền con số ----
+  // Số liệu là thứ người đọc lướt hay bỏ sót nhất, và không đoán được bằng
+  // ngữ pháp — nhiễu là chính con số đó bị bóp méo nên phải nhớ mới chọn đúng.
+  const NUM_RE = /^[\d][\d.,]*$/;
+
+  function fakeNumbers(numStr) {
+    const digits = numStr.replace(/[^\d]/g, "");
+    if (!digits) return [];
+    const n = parseInt(digits, 10);
+    if (!Number.isFinite(n) || n === 0) return [];
+    const fmt = (v) => numStr.replace(digits, String(v));
+    const cands = [n * 2, n * 3, Math.max(1, Math.round(n / 2)), n + 1, Math.max(1, n - 1),
+                   n * 10, Math.max(1, Math.round(n / 10))];
+    return [...new Set(cands)].filter((v) => v !== n && v > 0).map(fmt);
+  }
+
+  function makeNumber(ctx, used) {
+    const out = [];
+    for (const sentence of shuffle(ctx.sentences)) {
+      const idx = sentence.words.findIndex((w) => NUM_RE.test(clean(w)) && clean(w).length <= 12);
+      if (idx < 0) continue;
+      const answer = clean(sentence.words[idx]);
+      if (used.has("num:" + answer)) continue;
+      const fakes = shuffle(fakeNumbers(answer)).slice(0, 3);
+      if (fakes.length < 3) continue;
+      used.add("num:" + answer);
+      out.push({
+        kind: "number", label: "Số liệu",
+        prompt: sentence.words.map((w, i) => (i === idx ? "______" : w)).join(" "),
+        answer,
+        options: shuffle([answer, ...fakes]),
+        token: sentence.token, sentence: sentence.text
+      });
+      if (out.length >= 4) break;
+    }
+    return out;
+  }
+
+  // ---- Dạng 3: câu nào ĐÚNG với bài ----
+  // Bốn câu gần như giống hệt, ba câu bị đổi một từ khoá. Không có mẹo ngữ
+  // pháp nào giúp được ở đây — phải nhớ bài mới chọn đúng.
+  function makeWhichTrue(ctx, used) {
+    const { sentences, pool } = ctx;
+    const out = [];
+    for (const sentence of spread(sentences.filter((s) => s.words.length <= 30), 6)) {
+      const cands = sentence.words
+        .map((w, i) => ({ w: clean(w), i }))
+        .filter(({ w }) => isContentWord(w));
+      if (cands.length < 2) continue;
+      if (used.has("wt:" + sentence.token)) continue;
+
+      const swaps = shuffle(cands).slice(0, 3);
+      const low = sentence.text.toLowerCase();
+      const variants = [];
+      for (const sw of swaps) {
+        const alt = pool.find((w) =>
+          w.toLowerCase() !== sw.w.toLowerCase() &&
+          !low.includes(w.toLowerCase()) &&
+          w.split(" ").length === 1 &&
+          Math.abs(w.length - sw.w.length) <= 4 &&
+          !variants.some((v) => v.swapped === w));
+        if (!alt) continue;
+        const words = sentence.words.slice();
+        words[sw.i] = words[sw.i].replace(sw.w, alt);
+        variants.push({ text: words.join(" "), swapped: alt });
+      }
+      if (variants.length < 3) continue;
+
+      used.add("wt:" + sentence.token);
+      out.push({
+        kind: "whichtrue", label: "Câu nào đúng",
+        prompt: "Câu nào dưới đây ĐÚNG với bài viết?",
+        answer: cut(sentence.text, 160),
+        options: shuffle([cut(sentence.text, 160), ...variants.slice(0, 3).map((v) => cut(v.text, 160))]),
+        token: sentence.token, sentence: sentence.text
+      });
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+
+  // ---- Dạng 4: ý chính của mục ----
+  // Cần dàn bài. Kiểm tra đúng thứ RSVP hay làm mất nhất: biết nội dung nào
+  // thuộc về mục nào, tức là có nắm được bố cục bài hay không.
+  function makeMainIdea(ctx, used, blocks) {
+    if (!blocks || !blocks.length) return [];
+    const { sentences } = ctx;
+    // Câu mở đầu của mỗi mục = câu chủ đề
+    const sections = [];
+    let cur = null;
+    for (const b of blocks) {
+      if (b.type === "h") {
+        if (cur) sections.push(cur);
+        cur = { head: b.text, first: null };
+      } else if (cur && !cur.first) {
+        const s = sentences.find((x) => x.text.includes(b.text.slice(0, 40)));
+        if (s) cur.first = s;
+      }
+    }
+    if (cur) sections.push(cur);
+    const usable = sections.filter((s) => s.first && s.head);
+    if (usable.length < 4) return [];
+
+    const out = [];
+    for (const sec of shuffle(usable).slice(0, 3)) {
+      if (used.has("mi:" + sec.head)) continue;
+      const others = shuffle(usable.filter((s) => s !== sec)).slice(0, 3);
+      if (others.length < 3) continue;
+      used.add("mi:" + sec.head);
+      const answer = cut(sec.first.text, 140);
+      out.push({
+        kind: "mainidea", label: "Ý của mục",
+        prompt: "Mục “" + cut(sec.head, 60) + "” mở đầu bằng ý nào?",
+        answer,
+        options: shuffle([answer, ...others.map((o) => cut(o.first.text, 140))]),
+        token: sec.first.token, sentence: sec.first.text
+      });
+    }
+    return out;
+  }
+
+  // ---- Dạng 5: ý nào được nhắc trước ----
+  function makeOrder(ctx, used) {
+    const { sentences } = ctx;
+    if (sentences.length < 8) return [];
+    const out = [];
+    for (let round = 0; round < 2; round++) {
+      const four = shuffle(sentences).slice(0, 4).sort((a, b) => a.token - b.token);
+      if (four.length < 4) break;
+      const key = "od:" + four.map((f) => f.token).join(",");
+      if (used.has(key)) continue;
+      used.add(key);
+      const answer = cut(four[0].text, 110);
+      const opts = four.map((f) => cut(f.text, 110));
+      if (new Set(opts).size < 4) continue;
+      out.push({
+        kind: "order", label: "Thứ tự",
+        prompt: "Ý nào được nhắc tới TRƯỚC NHẤT trong phần bạn vừa đọc?",
+        answer, options: shuffle(opts),
+        token: four[0].token, sentence: four[0].text
+      });
+    }
+    return out;
+  }
+
+  // ---- Trộn các dạng lại ----
+  // `from`/`upTo` cho phép hỏi riêng một khoảng (luyện tốc độ, quiz theo mục).
+  // `blocks` để dựng câu hỏi về bố cục bài.
+  function buildQuiz(tokens, upTo, count = 5, vietnamese = false, from = 0, blocks = null) {
+    const ctx = quizContext(tokens, upTo, vietnamese, from, blocks);
+    if (!ctx) return [];
+
+    const used = new Set();
+    // Sinh theo thứ tự cố định (dạng nào cũng có cơ hội dùng câu tốt nhất),
+    // nhưng LẤY RA theo thứ tự ngẫu nhiên để bài kiểm tra không lần nào giống
+    // lần nào — kể cả về thứ tự các dạng câu hỏi.
+    const groups = shuffle([
+      makeWhichTrue(ctx, used),
+      makeCloze(ctx, used),
+      makeMainIdea(ctx, used, blocks),
+      makeNumber(ctx, used),
+      makeOrder(ctx, used)
+    ]);
+
+    // Lấy xen kẽ từng nhóm để một bài kiểm tra có đủ dạng, không dồn một loại.
+    // Chốt chặn cuối: không để hai câu hỏi trùng đáp án — các dạng được sinh
+    // độc lập nên vẫn có thể chạm nhau (hai câu "thứ tự" cùng ra một câu mở đầu).
+    const questions = [];
+    const seenAnswer = new Set();
+    for (let i = 0; questions.length < count; i++) {
+      let added = false;
+      for (const g of groups) {
+        if (i >= g.length) continue;
+        added = true;
+        const key = g[i].kind + "|" + g[i].answer.toLowerCase();
+        const plain = g[i].answer.toLowerCase();
+        if (seenAnswer.has(plain)) continue;
+        seenAnswer.add(plain);
+        questions.push(g[i]);
+        if (questions.length >= count) break;
+      }
+      if (!added) break;
+    }
+    return questions.map((q, i) => ({ ...q, id: "q" + i }));
   }
 
   window.__lampEngine = {

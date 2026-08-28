@@ -50,10 +50,12 @@ async function init() {
     if (res && res.ok) {
       window.close();
     } else {
-      $("err").textContent =
-        res && res.reason === "internal-page"
-          ? "Không chạy được trên trang nội bộ của Chrome."
-          : "Không mở được trình đọc trên trang này.";
+      const LOI = {
+        "internal-page": "Không chạy được trên trang nội bộ của Chrome.",
+        "empty-page": "Không tìm thấy nội dung đủ dài trên trang này.",
+        "empty-selection": "Chưa bôi đen đoạn nào, hoặc đoạn quá ngắn."
+      };
+      $("err").textContent = (res && LOI[res.reason]) || "Không mở được trình đọc trên trang này.";
     }
   });
 }

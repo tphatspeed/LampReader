@@ -25,6 +25,68 @@ chrome.runtime.onInstalled.addListener(async () => {
   });
 });
 
+// ============================ CỬA SỔ ĐỌC RIÊNG ============================
+//
+// Mặc định Lamp mở trong một CỬA SỔ RIÊNG chứ không phủ overlay lên trang web
+// đang đọc. Lý do: trang web vẫn chạy tiếp phía sau (video tự phát, thông báo,
+// script cuộn trang) và CSS của nó có thể xung đột; tách hẳn ra một cửa sổ thì
+// môi trường đọc sạch và ổn định, lại xếp cạnh cửa sổ khác được.
+//
+// Vẫn giữ chế độ overlay cho ai thích — bật/tắt bằng tuỳ chọn windowMode.
+
+const WIN_BOUNDS_KEY = "readerWindowBounds";
+const DEFAULT_BOUNDS = { width: 980, height: 760 };
+
+let readerWindowId = null;
+
+async function openReaderWindow(doc) {
+  // Nội dung bài có thể vài chục nghìn ký tự — không nhét vào URL được.
+  // Gửi qua storage.session (tự xoá khi đóng trình duyệt), URL chỉ mang mã ngắn.
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await chrome.storage.session.set({ ["doc:" + id]: doc });
+
+  const url = chrome.runtime.getURL("reader/reader.html?doc=" + id);
+
+  // Đã có cửa sổ đọc đang mở thì dùng lại, đừng rải thêm cửa sổ mới
+  if (readerWindowId !== null) {
+    try {
+      const win = await chrome.windows.get(readerWindowId, { populate: true });
+      const tab = win.tabs && win.tabs[0];
+      if (tab) {
+        await chrome.tabs.update(tab.id, { url });
+        await chrome.windows.update(readerWindowId, { focused: true });
+        return { ok: true, reason: "window-reused" };
+      }
+    } catch (e) {
+      readerWindowId = null; // cửa sổ đã bị đóng
+    }
+  }
+
+  const stored = (await chrome.storage.local.get(WIN_BOUNDS_KEY))[WIN_BOUNDS_KEY];
+  const b = { ...DEFAULT_BOUNDS, ...(stored || {}) };
+  const win = await chrome.windows.create({
+    url,
+    type: "popup",   // không thanh địa chỉ, không tab — đúng kiểu một app đọc
+    focused: true,
+    width: b.width, height: b.height,
+    ...(Number.isInteger(b.left) ? { left: b.left } : {}),
+    ...(Number.isInteger(b.top) ? { top: b.top } : {})
+  });
+  readerWindowId = win.id;
+  return { ok: true, reason: "window" };
+}
+
+// Nhớ kích thước/vị trí cửa sổ cho lần sau
+chrome.windows.onBoundsChanged.addListener((win) => {
+  if (win.id !== readerWindowId) return;
+  chrome.storage.local.set({
+    [WIN_BOUNDS_KEY]: { width: win.width, height: win.height, left: win.left, top: win.top }
+  });
+});
+chrome.windows.onRemoved.addListener((id) => {
+  if (id === readerWindowId) readerWindowId = null;
+});
+
 async function launchReader(tabId, url, forceSelection = false) {
   if (!url || /^(chrome|edge|about|chrome-extension|devtools|view-source):/.test(url)) {
     return { ok: false, reason: "internal-page" };
@@ -40,7 +102,31 @@ async function launchReader(tabId, url, forceSelection = false) {
     return { ok: true, reason: "pdf-viewer" };
   }
 
+  const { windowMode } = await chrome.storage.sync.get({ windowMode: DEFAULTS.windowMode });
+
   try {
+    if (windowMode) {
+      // Chỉ tiêm bộ TÁCH NỘI DUNG vào trang, lấy kết quả ra rồi thôi —
+      // trình đọc chạy ở cửa sổ riêng nên trang web không bị đụng gì thêm.
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ["content/extractor.js"]
+      });
+      const [res] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (force) => window.__lampExtract(force),
+        args: [forceSelection]
+      });
+      const doc = res && res.result;
+      const joined = doc && doc.blocks ? doc.blocks.map((b) => b.text).join(" ") : "";
+      if (joined.trim().length < 40) {
+        return { ok: false, reason: forceSelection ? "empty-selection" : "empty-page" };
+      }
+      doc.url = url;
+      return await openReaderWindow(doc);
+    }
+
+    // Chế độ overlay (cũ): tiêm cả trình đọc vào trang
     await chrome.scripting.executeScript({
       target: { tabId },
       files: [

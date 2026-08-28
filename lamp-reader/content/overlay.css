@@ -678,16 +678,61 @@ kbd {
   cursor: pointer;
 }
 .outline-item:hover { background: var(--raise); }
+
+/* Mỗi mục là một hàng: nhảy tới mục + nút kiểm tra riêng mục đó */
+.outline-row { display: flex; align-items: stretch; gap: 4px; border-radius: 10px; }
 /* Thụt lề theo cấp tiêu đề đã chuẩn hoá (h2/h3 hay h1/h2 đều ra 0,1,2) */
-.outline-item[data-depth="1"] { padding-left: 28px; font-size: 13.5px; }
-.outline-item[data-depth="2"] { padding-left: 44px; font-size: 13px; color: var(--muted); }
+.outline-row[data-depth="1"] { padding-left: 20px; }
+.outline-row[data-depth="2"] { padding-left: 38px; }
+.outline-row[data-depth="1"] .outline-item { font-size: 13.5px; }
+.outline-row[data-depth="2"] .outline-item { font-size: 13px; color: var(--muted); }
+
 /* Mục đang đọc — mở dàn bài ra là thấy ngay mình đang ở đâu */
-.outline-item.current {
-  background: var(--raise);
-  box-shadow: inset 3px 0 0 var(--accent);
-  font-weight: 600;
+.outline-row.current { background: var(--raise); box-shadow: inset 3px 0 0 var(--accent); }
+.outline-row.current .outline-item { font-weight: 600; }
+.outline-row.current .outline-pos { color: var(--accent); }
+
+.outline-quiz {
+  flex: none;
+  align-self: center;
+  width: 32px; height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
 }
-.outline-item.current .outline-pos { color: var(--accent); }
+.outline-quiz:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Nhãn dạng câu hỏi (Điền từ / Câu nào đúng / Ý của mục / Thứ tự / Số liệu) */
+.quiz-kind {
+  display: inline-block;
+  margin: 0 8px 0 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--raise);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  vertical-align: 1px;
+}
+
+/* Câu hỏi dạng chọn cả câu: phương án dài, cho xuống dòng và canh trái */
+.quiz-opts { align-items: stretch; }
+.quiz-opt {
+  text-align: left;
+  line-height: 1.55;
+  white-space: normal;
+}
 .outline-text { flex: 1; line-height: 1.45; }
 .outline-pos {
   flex: none;
@@ -778,6 +823,17 @@ kbd {
 .quiz-result b { font-size: 17px; color: var(--accent); }
 .quiz-result span { color: var(--muted); }
 
+.quiz-scope {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: var(--raise);
+  border-radius: 12px;
+}
+.quiz-scope .seg { min-height: 34px; font-size: 12.5px; }
+.quiz-scope .seg:disabled { opacity: .45; cursor: default; }
+
 .quiz-round {
   display: inline-block;
   margin-bottom: 10px;
@@ -797,6 +853,38 @@ kbd {
 }
 
 /* ==================== Trích đoạn đã lưu ==================== */
+
+/* Huy hiệu đếm trên nút dấu trang — nhìn là biết đã lưu được mấy câu */
+.round { position: relative; }
+.badge {
+  position: absolute;
+  top: -3px; right: -3px;
+  min-width: 18px; height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.badge[hidden] { display: none; }
+
+/* Nút lưu + xem trước câu sắp lưu */
+.hl-save { font-size: 14px; }
+.hl-preview {
+  margin-top: 9px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--line);
+  border-radius: 0 8px 8px 0;
+  background: var(--raise);
+  color: var(--muted);
+  font-family: var(--word-font);
+  font-size: 13px;
+  line-height: 1.6;
+}
 
 .hl-list { display: flex; flex-direction: column; gap: 8px; }
 .hl-item { display: flex; align-items: flex-start; gap: 6px; }

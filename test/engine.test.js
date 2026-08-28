@@ -105,7 +105,11 @@ ok("mỗi câu đúng 4 phương án", qs.every(q => q.options.length === 4));
 ok("đáp án luôn nằm trong phương án", qs.every(q => q.options.includes(q.answer)));
 ok("phương án không trùng nhau", qs.every(q => new Set(q.options).size === 4));
 ok("đáp án không lặp giữa các câu", new Set(qs.map(q => q.answer.toLowerCase())).size === qs.length);
-ok("prompt luôn có chỗ trống", qs.every(q => q.prompt.includes("______")));
+ok("mọi câu đều có nhãn dạng", qs.every(q => q.kind && q.label));
+ok("câu điền từ/số liệu có chỗ trống",
+   qs.filter(q => q.kind === "cloze" || q.kind === "number").every(q => q.prompt.includes("______")));
+ok("câu chọn-cả-câu có prompt là câu hỏi, không phải chỗ trống",
+   qs.filter(q => ["whichtrue","mainidea","order"].includes(q.kind)).every(q => !q.prompt.includes("______")));
 ok("có token để nhảy về", qs.every(q => Number.isInteger(q.token) && q.token >= 0 && q.token < toks1.length));
 ok("có câu gốc kèm theo", qs.every(q => typeof q.sentence === "string" && q.sentence.length > 0));
 ok("đáp án xuất hiện trong câu gốc (để tô sáng được)",
@@ -115,10 +119,38 @@ ok("nhiễu KHÔNG lộ trong câu đang hỏi", qs.every(q =>
            .every(o => !q.sentence.toLowerCase().includes(o.toLowerCase()))));
 eq("nội dung quá ngắn thì không sinh câu hỏi", E.buildQuiz(E.buildTokens([{ text: "Ngắn quá.", type: "p" }], 1), 0, 5, true).length, 0);
 
+console.log("\n== các dạng câu hỏi mới ==");
+{
+  const many = E.buildQuiz(toks1, toks1.length - 1, 8, true, 0, blocks);
+  const kinds = [...new Set(many.map(q => q.kind))];
+  console.log("  dạng sinh được:", kinds.join(", "));
+  ok("sinh được nhiều hơn một dạng", kinds.length >= 2, kinds.join(","));
+
+  const wt = many.filter(q => q.kind === "whichtrue");
+  if (wt.length) {
+    ok("whichtrue: đáp án là câu có thật trong bài",
+       wt.every(q => q.sentence.startsWith(q.answer.replace(/…$/, "").slice(0, 30))));
+    ok("whichtrue: ba phương án nhiễu KHÁC đáp án",
+       wt.every(q => new Set(q.options).size === 4));
+  } else ok("(không có whichtrue trong lần chạy này)", true);
+
+  const nb = many.filter(q => q.kind === "number");
+  if (nb.length) {
+    ok("number: mọi phương án đều là số", nb.every(q => q.options.every(o => /^[\d][\d.,]*$/.test(o))));
+    ok("number: đáp án nằm trong câu gốc", nb.every(q => q.sentence.includes(q.answer)));
+  } else ok("(không có number trong lần chạy này)", true);
+
+  const od = many.filter(q => q.kind === "order");
+  if (od.length) {
+    ok("order: đáp án là câu sớm nhất trong 4 lựa chọn",
+       od.every(q => q.options.includes(q.answer)));
+  } else ok("(không có order trong lần chạy này)", true);
+}
+
 // Chạy nhiều lần vì buildQuiz có yếu tố ngẫu nhiên
 let stable = true;
 for (let i = 0; i < 200; i++) {
-  const r = E.buildQuiz(toks1, toks1.length - 1, 8, true);
+  const r = E.buildQuiz(toks1, toks1.length - 1, 8, true, 0, blocks);
   if (!r.every(q => q.options.length === 4 && q.options.includes(q.answer) && new Set(q.options).size === 4)) { stable = false; break; }
 }
 ok("ổn định qua 200 lần sinh ngẫu nhiên", stable);

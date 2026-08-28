@@ -28,7 +28,10 @@
     tts: false,
     voiceURI: "",
     restReminder: true,
-    shortWords: false
+    shortWords: false,
+    // true = mở trình đọc trong CỬA SỔ RIÊNG (mặc định, giống SwiftRead)
+    // false = phủ overlay lên chính trang web đang xem (cách cũ)
+    windowMode: true
   };
 
   // self có ở mọi ngữ cảnh (window trong trang, WorkerGlobalScope trong SW)

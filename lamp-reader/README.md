@@ -28,6 +28,15 @@ Trình đọc nhanh RSVP cho Chrome. Trang này là tài liệu đầy đủ; xe
 
 ## Bắt đầu
 
+Lamp mở trong một **cửa sổ đọc riêng**, không phủ lên trang web bạn đang xem.
+Trang gốc vẫn chạy tiếp phía sau (video tự phát, thông báo, script cuộn trang)
+và CSS của nó có thể xung đột với overlay — tách hẳn ra thì môi trường đọc sạch
+và ổn định, lại xếp cạnh cửa sổ khác được. Cửa sổ nhớ kích thước/vị trí cho lần
+sau, và mở bài mới thì dùng lại đúng cửa sổ đó chứ không rải thêm cửa sổ mới.
+
+Muốn quay lại kiểu cũ (phủ overlay lên trang), tắt **Mở ở cửa sổ riêng** trong
+bảng cài đặt.
+
 Trình đọc **không tự chạy** khi mở — nó dừng sẵn ở từ đầu tiên, chờ bạn nhấn `Space`.
 
 | Muốn | Làm |
@@ -89,24 +98,51 @@ Liệt kê toàn bộ tiêu đề mục kèm vị trí phần trăm, thụt lề
 mức), và đánh dấu mục bạn đang đọc. Bấm là nhảy tới. Bù lại phần cấu trúc văn bản
 mà RSVP xoá mất.
 
+Mỗi mục có thêm **nút `?` kiểm tra riêng mục đó** — đọc xong một chương là hỏi
+ngay chương đó, không phải đọc hết bài mới kiểm tra được. Bấm nút này không làm
+nhảy vị trí đang đọc.
+
 ### Kiểm tra hiểu — phím `Q`
 
-Đọc xong sẽ tự hiện, hoặc bấm `Q` bất cứ lúc nào. Ứng dụng khoét một từ khỏi các
-câu bạn vừa đọc và đưa bốn phương án; số câu hỏi tăng theo lượng đã đọc (3–8 câu).
+Đọc xong sẽ tự hiện, hoặc bấm `Q` bất cứ lúc nào — **không cần đọc hết bài**.
+Bảng kiểm tra có bộ chọn phạm vi **Phần đã đọc / Cả bài**; chưa đọc đủ thì tự
+chuyển sang *Cả bài* thay vì từ chối tạo câu hỏi.
 
-- Từ bị khoét chọn theo **độ hiếm trong bài**, không phải từ nằm giữa câu — khoét
-  từ lặp đi lặp lại chỉ kiểm tra trí nhớ mặt chữ.
-- Phương án nhiễu không bao giờ là từ có mặt trong chính câu đang hỏi.
-- Sai câu nào thì **hiện lại nguyên câu gốc** kèm nút *Xem lại đoạn này* để nhảy về.
-- Chấm xong gợi ý điều chỉnh tốc độ theo điểm số.
+**Mỗi lần mở là một bộ câu khác.** Câu được chọn ngẫu nhiên trong từng khoảng
+của bài, từ bị khoét lấy ngẫu nhiên trong nhóm từ hiếm, và thứ tự các dạng cũng
+đảo — nên làm lại để ôn được, không lặp y hệt. Chấm xong có nút **↻ Bộ câu hỏi
+khác**.
 
-Toàn bộ sinh tại chỗ, không gọi mạng.
+Số câu hỏi tăng theo lượng nội dung (3–8 câu), trộn **năm dạng** để không đoán
+được bằng ngữ pháp:
 
-### Trích đoạn — phím `H`
+| Dạng | Hỏi gì | Vì sao khó đoán |
+|---|---|---|
+| **Điền từ** | Từ còn thiếu trong câu | Từ bị khoét chọn theo *độ hiếm trong bài*; nhiễu cùng số âm tiết và không có mặt trong chính câu đang hỏi |
+| **Số liệu** | Con số còn thiếu | Nhiễu là chính con số đó bị bóp méo (×2, ×10, ±1) — không nhớ thì không chọn được |
+| **Câu nào đúng** | Bốn câu gần giống hệt, chọn câu khớp bài | Ba câu kia bị đổi đúng một từ khoá; ngữ pháp đều đúng cả bốn |
+| **Ý của mục** | Mục này mở đầu bằng ý nào | Nhiễu là câu mở đầu của các mục *khác* — phải nắm bố cục bài |
+| **Thứ tự** | Ý nào được nhắc tới trước nhất | Kiểm tra mạch bài, không kiểm tra từ ngữ |
 
-Đang đọc bấm `H` là lưu nguyên câu hiện tại. Nút dấu trang trên thanh tiêu đề mở
-danh sách: bấm một câu để nhảy về đúng chỗ, hoặc **Chép dạng Markdown** / **Tải
-file .md** để đưa sang ứng dụng ghi chú. Lưu theo từng tài liệu, nằm ở máy bạn.
+Ba dạng sau không thể đoán bằng ngữ pháp — đó là lý do chúng được thêm vào.
+Tiêu đề bị loại khỏi kho câu hỏi (khoét từ trong nhan đề thì vô nghĩa), và một
+câu không bao giờ vắt qua ranh giới khối để đáp án không chứa sẵn tên mục.
+
+Sai câu nào thì **hiện lại nguyên câu gốc** kèm nút *Xem lại đoạn này* để nhảy
+về. Chấm xong gợi ý điều chỉnh tốc độ theo điểm số. Toàn bộ sinh tại chỗ, không
+gọi mạng.
+
+### Trích đoạn — nút dấu trang hoặc phím `H`
+
+Hai cách lưu câu đang đọc: nhấn `H` bất cứ lúc nào, hoặc mở nút **dấu trang**
+trên thanh tiêu đề rồi bấm **＋ Lưu câu đang đọc** (có xem trước câu sắp lưu).
+Nút dấu trang mang **huy hiệu đếm** số câu đã lưu.
+
+Trong danh sách: bấm một câu để nhảy về đúng chỗ, hoặc **Chép dạng Markdown** /
+**Tải file .md** để đưa sang ứng dụng ghi chú. Lưu theo từng tài liệu, ở máy bạn.
+
+Đang đứng ở tiêu đề mà bấm lưu thì Lamp tự nhảy tới câu nội dung đầu tiên của
+mục đó — lưu nguyên cái nhan đề thì chẳng để làm gì.
 
 ### Luyện tốc độ — bảng cài đặt → *Bắt đầu buổi luyện*
 
@@ -287,8 +323,9 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 │   ├── engine.js            Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
 │   ├── epub.js              Đọc EPUB: tự giải nén ZIP, đi theo spine
 │   ├── pdftext.js           Dựng cấu trúc từ mẩu chữ PDF: cột, đoạn, tiêu đề
-│   ├── reader.js            Giao diện overlay RSVP (Shadow DOM)
+│   ├── reader.js            Giao diện trình đọc RSVP (Shadow DOM)
 │   └── overlay.css          5 bảng màu (+ tuỳ chọn theo hệ thống) và bố cục
+├── reader/                  Cửa sổ đọc riêng (mặc định) — reader.html + boot.js
 ├── popup/                   Popup khi bấm icon: thư viện, cài đặt nhanh, quyền
 ├── viewer/                  Trang đọc PDF/EPUB riêng
 ├── fonts/                   Be Vietnam Pro, Literata, Noto Serif (nhúng sẵn)
@@ -296,8 +333,9 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 └── icons/
 
 test/                        ← KHÔNG nằm trong extension
-├── engine.test.js           53 phép — logic thuần, chạy bằng node
-├── harness.html             91 phép — trình đọc, chạy thật trong trình duyệt
+├── engine.test.js           60 phép — logic thuần, chạy bằng node
+├── harness.html            122 phép — trình đọc, chạy thật trong trình duyệt
+├── window.test.html         20 phép — cửa sổ đọc riêng: boot, khoá tài liệu, trích đoạn
 ├── popup.test.html          29 phép — popup, thư viện, cấp quyền
 ├── epub.test.html           32 phép — đọc EPUB
 ├── pdf.test.html            21 phép — trích xuất PDF, so bản cũ với bản mới
@@ -313,7 +351,7 @@ thì chỉ sửa ở đó.
 
 ## Chạy kiểm thử
 
-Tổng cộng **226 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
+Tổng cộng **284 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
 `chrome`), không phải bản sao.
 
 Phần logic thuần chạy thẳng bằng node:
@@ -333,16 +371,18 @@ Dùng `test/serve.py` chứ đừng dùng `python3 -m http.server`: nó gửi he
 `no-store` để trình duyệt không giữ lại bản `.js` cũ. Thiếu điều đó, bộ kiểm thử
 sẽ âm thầm chạy trên mã nguồn lỗi thời và báo xanh sai.
 
-Rồi mở lần lượt `harness.html`, `popup.test.html`, `epub.test.html`,
-`pdf.test.html` dưới `http://localhost:8899/test/`. Mỗi trang tự lái giao diện
+Rồi mở lần lượt `harness.html`, `window.test.html`, `popup.test.html`,
+`epub.test.html`, `pdf.test.html` dưới `http://localhost:8899/test/`. Mỗi trang tự lái giao diện
 và in ra số phép đạt/hỏng.
 
 `test/demo.html` mở sẵn trình đọc trên một bài mẫu để xem nhanh giao diện mà không
 cần cài extension.
 
 > Sửa code mà kết quả không đổi thì thêm `?cb=1` vào URL để bỏ qua cache.
-> Nếu bộ kiểm thử chạy chậm bất thường, đưa tab ra trước — trình duyệt bóp timer
-> của tab đang ẩn.
+>
+> **Để tab hiển thị trong lúc chạy.** Tab bị ẩn thì Chrome kẹp `setTimeout` về
+> ~1 giây, và sau 5 phút ẩn thì kẹp về **1 lần mỗi phút** — bộ kiểm thử trông
+> như treo cứng trong khi thật ra vẫn đang chạy.
 
 ## Muốn sửa gì thì sửa ở đâu
 
@@ -352,7 +392,8 @@ cần cài extension.
 | Thuật toán tách nội dung chính | `content/extractor.js`, hàm `scoreNode` |
 | Loại khối (tiêu đề/đoạn/danh sách) | `content/extractor.js`, hàm `blockType` |
 | Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
-| Cách sinh câu hỏi kiểm tra | `content/engine.js`, hàm `buildQuiz` |
+| Thêm/sửa một DẠNG câu hỏi | `content/engine.js`, các hàm `make…` rồi khai vào `groups` trong `buildQuiz` |
+| Kích thước cửa sổ đọc mặc định | `background.js`, hằng `DEFAULT_BOUNDS` |
 | Vị trí chấm ORP | `content/reader.js`, hàm `pivotIndex` |
 | Cách tô sáng chạy theo chữ | `content/reader.js`, hàm `highlightInto` |
 | Nội dung hiện khi RSVP dừng | `content/reader.js`, `updateFocusOverlay` / `paintBlocksInto` |

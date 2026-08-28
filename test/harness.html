@@ -97,9 +97,13 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   const items = $$(".outline-item");
   ok("dàn bài có mục", items.length >= 2, `got ${items.length}`);
   ok("mục có phần trăm hợp lệ", items.every(b => /^\d+%$/.test(b.querySelector(".outline-pos").textContent)));
-  ok("mục có data-depth", items.every(b => b.dataset.depth !== undefined));
+  // data-depth và .current nằm trên .outline-row (hàng bọc ngoài), vì mỗi mục
+  // giờ gồm nút nhảy tới + nút kiểm tra riêng mục đó
+  const rows0 = $$(".outline-row");
+  ok("mỗi mục là một hàng", rows0.length === items.length, `${rows0.length}/${items.length}`);
+  ok("hàng có data-depth", rows0.every(r => r.dataset.depth !== undefined));
   ok("h1 và h2 được thụt lề khác nhau",
-     new Set(items.map(b => b.dataset.depth)).size >= 2);
+     new Set(rows0.map(r => r.dataset.depth)).size >= 2);
 
   head("chế độ Dẫn dòng dựng đúng thẻ");
   $$("[data-mode]").find(b => b.dataset.mode === "guide").click();
@@ -166,8 +170,8 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "o", bubbles: true }));
   await wait(60);
   ok("mở lại dàn bài thấy mục đang đọc được đánh dấu",
-     $$(".outline-item")[1].classList.contains("current"),
-     $$(".outline-item").map(b => b.className).join(" | "));
+     $$(".outline-row")[1].classList.contains("current"),
+     $$(".outline-row").map(r => r.className).join(" | "));
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   await wait(40);
   $$("[data-step]").find(b => b.dataset.step === "chunk:-1").click();
@@ -333,6 +337,121 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
      +$("#wpmVal").textContent === wpmBefore, `${$("#wpmVal").textContent} vs ${wpmBefore}`);
   PANELS_CLOSE();
 
+  head("quiz: nhiều dạng câu hỏi, không chỉ điền từ");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+  await wait(60);
+  $("#track").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, composed: true }));
+  await wait(80);
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "q", bubbles: true }));
+  await wait(200);
+  {
+    const cards = $$(".quiz-q");
+    ok("mở được quiz", cards.length >= 3, `got ${cards.length}`);
+    const kinds = $$(".quiz-kind").map(e => e.textContent.trim());
+    ok("mỗi câu có nhãn dạng", kinds.length === cards.length, `${kinds.length}/${cards.length}`);
+    ok("có nhiều hơn một dạng câu hỏi", new Set(kinds).size >= 2, kinds.join(", "));
+    ok("không câu nào dựng từ tiêu đề bài",
+       !$$(".quiz-prompt").some(e => /^\s*\d+\.?\s*(Điền từ)?\s*Trí tuệ nhân tạo và công việc\s*$/.test(e.textContent.trim())));
+    $("#quizClose").click(); await wait(60);
+  }
+
+  head("quiz: làm được NGAY khi chưa đọc gì");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+  await wait(80);
+  ok("đang ở đầu bài", $("#pos").textContent.split("/")[0].trim() === "1");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "q", bubbles: true }));
+  await wait(250);
+  {
+    ok("mở được quiz dù chưa đọc gì", $("#quiz").hidden === false);
+    ok("có câu hỏi ngay", $$(".quiz-q").length >= 3, `got ${$$(".quiz-q").length}`);
+    ok("có bộ chọn phạm vi", $$("[data-scope]").length === 2);
+    const on = $$("[data-scope]").find(b => b.classList.contains("on"));
+    ok("tự chọn 'Cả bài' khi chưa đọc gì", on && on.dataset.scope === "all", on && on.dataset.scope);
+    ok("nút 'Phần đã đọc' bị khoá khi chưa đọc", $('[data-scope="read"]').disabled === true);
+  }
+
+  head("quiz: mỗi lần một bộ câu khác");
+  {
+    const chup = () => $$(".quiz-prompt").map(e => e.textContent.trim()).join("§");
+    const bo = new Set();
+    // Đóng rồi mở lại bằng đúng đường người dùng đi. Gộp về MỘT lần chờ mỗi
+    // vòng: khi tab bị ẩn, trình duyệt kẹp mỗi setTimeout về ~1 giây, nhiều
+    // lần chờ nhỏ sẽ khiến bộ kiểm thử chạy lê thê.
+    for (let i = 0; i < 5; i++) {
+      bo.add(chup());
+      $("#quizClose").click();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "q", bubbles: true }));
+      await wait(220);
+    }
+    ok("5 lần mở ra ít nhất 3 bộ câu khác nhau", bo.size >= 3, `chỉ ${bo.size} bộ`);
+  }
+
+  head("quiz: chấm xong có nút đổi bộ câu");
+  {
+    $$(".quiz-q").forEach(c => c.querySelector(".quiz-opt").click());
+    await wait(60);
+    $("#quizSubmit").click(); await wait(150);
+    ok("hiện nút Bộ câu hỏi khác", !!$("#quizAgain"));
+    const truoc = $$(".quiz-prompt").map(e => e.textContent.trim()).join("§");
+    $("#quizAgain").click(); await wait(200);
+    ok("bấm vào là ra bộ mới", $$(".quiz-prompt").map(e => e.textContent.trim()).join("§") !== truoc);
+    ok("bộ mới chưa bị chấm", $("#quizResult").hidden === true);
+    $("#quizClose").click(); await wait(60);
+  }
+
+  head("trích đoạn: lưu được bằng NÚT, không chỉ bằng phím H");
+  {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "r", bubbles: true }));
+    await wait(60);
+    $("#hlBtn").click(); await wait(150);
+    ok("bảng có nút Lưu ngay cả khi rỗng", !!$("#hlSave"));
+    ok("có xem trước câu sắp lưu", !!$(".hl-preview"));
+    ok("huy hiệu đang ẩn khi chưa lưu gì", $("#hlCount").hidden === true);
+    $("#hlSave").click(); await wait(200);
+    ok("bấm nút Lưu thì danh sách có mục", $$(".hl-item").length === 1, `${$$(".hl-item").length}`);
+    ok("huy hiệu hiện số đã lưu", $("#hlCount").hidden === false && $("#hlCount").textContent === "1",
+       $("#hlCount").textContent);
+    const luu = $$(".hl-text")[0].textContent;
+    ok("KHÔNG lưu nhầm tiêu đề bài",
+       luu !== "Trí tuệ nhân tạo và công việc", luu.slice(0, 60));
+    ok("lưu đúng câu nội dung đầu tiên", /Trí tuệ nhân tạo đang thay đổi/.test(luu), luu.slice(0, 60));
+    $("#hlClear").click(); await wait(80);
+    ok("xoá hết thì huy hiệu ẩn lại", $("#hlCount").hidden === true);
+    $("#hlClose").click(); await wait(60);
+  }
+
+  head("phím H có trong danh sách phím tắt");
+  {
+    $("#settingsBtn").click(); await wait(80);
+    const keys = $(".keys").textContent;
+    ok("có nhắc phím H", /\bH\b/.test(keys) && /lưu câu/.test(keys), keys.replace(/\s+/g, " ").slice(0, 120));
+    $("#sheetClose").click(); await wait(60);
+  }
+
+  head("dàn bài: mỗi mục có nút kiểm tra riêng");
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "o", bubbles: true }));
+  await wait(100);
+  {
+    const rows = $$(".outline-row");
+    ok("dàn bài dựng theo hàng", rows.length >= 2, `got ${rows.length}`);
+    ok("mỗi mục có nút quiz", $$(".outline-quiz").length === rows.length);
+    ok("nút quiz mang khoảng token", $$(".outline-quiz").every(b =>
+       Number.isInteger(+b.dataset.from) && Number.isInteger(+b.dataset.to) && +b.dataset.to > +b.dataset.from));
+    ok("thụt lề theo cấp vẫn còn", new Set(rows.map(r => r.dataset.depth)).size >= 2);
+
+    // bấm nút quiz của mục -> mở quiz, KHÔNG nhảy vị trí đọc
+    const posTruoc = $("#pos").textContent;
+    $$(".outline-quiz")[0].click();
+    await wait(220);
+    ok("bấm nút quiz mở bảng kiểm tra", $("#quiz").hidden === false);
+    ok("bấm nút quiz KHÔNG làm nhảy chỗ đang đọc", $("#pos").textContent === posTruoc,
+       `${posTruoc} → ${$("#pos").textContent}`);
+    const t = $("#quizBody").textContent;
+    ok("quiz mục có câu hỏi hoặc báo mục quá ngắn",
+       $$(".quiz-q").length > 0 || /quá ngắn/.test(t), t.slice(0, 60));
+    PANELS_CLOSE();
+  }
+
   head("gộp lượt ghi storage (hạn mức sync là 120/phút)");
   const before = window.__writes.sync;
   // giả lập giữ phím ↑: 40 lần bump liên tiếp
@@ -403,6 +522,13 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
 })().catch(e => {
   log.innerHTML += `<span class="fail">THROWN: ${e && e.stack || e}</span>\n`;
   window.__lampTestResult = { pass, fail: fail + 1, failed: results.concat("THROWN: " + e) };
+});
+
+window.addEventListener("error", (e) => {
+  document.getElementById("log").innerHTML += `<span class="fail">THROWN: ${e.message} @ ${e.filename}:${e.lineno}</span>\n`;
+});
+window.addEventListener("unhandledrejection", (e) => {
+  document.getElementById("log").innerHTML += `<span class="fail">REJECTED: ${e.reason}</span>\n`;
 });
 </script>
 </body>

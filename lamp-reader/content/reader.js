@@ -78,6 +78,7 @@
     ttsOffsets: null,
     ttsFallback: null,
     quiz: null,
+    quizScope: "read",
     highlights: [],
     training: null
   };
@@ -177,7 +178,7 @@
 
         <div class="topbar">
           <div class="doc-title" id="docTitle"></div>
-          <button class="round" id="hlBtn" title="Trích đoạn đã lưu (H để lưu câu)" aria-label="Trích đoạn đã lưu">${icon.mark}</button>
+          <button class="round" id="hlBtn" title="Trích đoạn đã lưu (phím H để lưu câu đang đọc)" aria-label="Trích đoạn đã lưu">${icon.mark}<i class="badge" id="hlCount" hidden></i></button>
           <button class="round" id="outlineBtn" title="Dàn bài (O)" aria-label="Dàn bài">${icon.list}</button>
           <button class="round" id="settingsBtn" title="Cài đặt (S)" aria-label="Cài đặt">${icon.gear}</button>
           <button class="round" id="closeBtn" title="Đóng (Esc)" aria-label="Đóng">${icon.x}</button>
@@ -267,6 +268,7 @@
               ${toggle("context", "Xem ngữ cảnh", "Hiện các từ xung quanh, mờ hơn")}
               ${toggle("warmup", "Khởi động chậm", "40 cụm đầu chạy ở 65% tốc độ rồi tăng dần")}
               ${toggle("restReminder", "Nhắc nghỉ mắt", "Cứ 20 phút nhắc nhìn xa 20 giây")}
+              ${toggle("windowMode", "Mở ở cửa sổ riêng", "Tắt đi thì Lamp phủ lên chính trang web đang xem. Áp dụng từ lần mở sau.")}
             </div>
             <div class="group">
               <div class="group-label">Luyện tốc độ</div>
@@ -280,7 +282,8 @@
             <div class="keys">
               <b>Phím tắt</b>
               <div><kbd>Space</kbd> phát/dừng · <kbd>←</kbd><kbd>→</kbd> lùi/tiến 10 · <kbd>Shift</kbd>+<kbd>←</kbd> đọc lại câu</div>
-              <div><kbd>↑</kbd><kbd>↓</kbd> tốc độ · <kbd>M</kbd> đổi chế độ · <kbd>O</kbd> dàn bài · <kbd>Q</kbd> kiểm tra · <kbd>S</kbd> cài đặt</div>
+              <div><kbd>↑</kbd><kbd>↓</kbd> tốc độ · <kbd>M</kbd> đổi chế độ · <kbd>O</kbd> dàn bài</div>
+              <div><kbd>H</kbd> lưu câu đang đọc · <kbd>Q</kbd> kiểm tra hiểu · <kbd>S</kbd> cài đặt · <kbd>R</kbd> đọc lại từ đầu</div>
             </div>
           </div>
         </div>
@@ -473,7 +476,7 @@
       applyStyle(); syncControls(); save();
     });
 
-    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach((k) =>
+    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts", "windowMode"].forEach((k) =>
       $("#" + k).addEventListener("change", (e) => {
         state[k] = e.target.checked;
         if (k === "tts") { stopSpeech(); syncControls(); if (state.playing) { pause(); play(); } }
@@ -488,6 +491,12 @@
     });
 
     $("#outlineList").addEventListener("click", (e) => {
+      const q = e.target.closest(".outline-quiz");
+      if (q) {
+        e.stopPropagation();
+        quizSection(parseInt(q.dataset.from, 10), parseInt(q.dataset.to, 10));
+        return;
+      }
       const b = e.target.closest("[data-token]");
       if (!b) return;
       jumpTo(parseInt(b.dataset.token, 10));
@@ -777,7 +786,7 @@
     $$("[data-font]").forEach((b) => b.classList.toggle("on", b.dataset.font === state.fontFamily));
     $$("[data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === state.theme));
     $$("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
-    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts"].forEach(
+    ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts", "windowMode"].forEach(
       (k) => ($("#" + k).checked = state[k])
     );
   }
@@ -1023,23 +1032,45 @@
       return;
     }
     const total = Math.max(1, state.tokens.length);
+    // Mỗi mục kèm nút kiểm tra riêng: đọc xong một chương là hỏi ngay chương
+    // đó, thay vì phải đọc hết bài mới kiểm tra được.
     list.innerHTML = items
-      .map((it) => `<button class="outline-item" data-token="${it.token}" data-depth="${it.depth || 0}">
-          <span class="outline-text">${esc(it.text)}</span>
-          <span class="outline-pos">${Math.round((it.token / total) * 100)}%</span>
-        </button>`)
+      .map((it, i) => {
+        const to = (i + 1 < items.length ? items[i + 1].token - 1 : state.tokens.length - 1);
+        return `<div class="outline-row" data-depth="${it.depth || 0}">
+          <button class="outline-item" data-token="${it.token}">
+            <span class="outline-text">${esc(it.text)}</span>
+            <span class="outline-pos">${Math.round((it.token / total) * 100)}%</span>
+          </button>
+          <button class="outline-quiz" data-from="${it.token}" data-to="${to}"
+            title="Kiểm tra riêng mục này" aria-label="Kiểm tra mục ${esc(it.text)}">?</button>
+        </div>`;
+      })
       .join("");
     markOutlineCurrent();
   }
 
   // Đánh dấu mục đang đọc để mở dàn bài ra là biết ngay mình đang ở đâu
   function markOutlineCurrent() {
-    const btns = $$(".outline-item");
+    const rows = $$(".outline-row");
     let cur = -1;
-    btns.forEach((b, i) => {
-      if (+b.dataset.token <= state.idx) cur = i;
+    rows.forEach((r, i) => {
+      const b = r.querySelector(".outline-item");
+      if (b && +b.dataset.token <= state.idx) cur = i;
     });
-    btns.forEach((b, i) => b.classList.toggle("current", i === cur));
+    rows.forEach((r, i) => r.classList.toggle("current", i === cur));
+  }
+
+  // Kiểm tra riêng một mục trong dàn bài
+  function quizSection(from, to) {
+    const items = E.buildOutline(state.blocks, state.tokens);
+    const it = items.find((x) => x.token === from);
+    openQuiz({
+      from, upTo: to,
+      count: 4,
+      title: it ? "Mục: " + it.text : "Kiểm tra mục này",
+      emptyMsg: "Mục này quá ngắn để tạo câu hỏi. Hãy thử mục dài hơn, hoặc bấm Q để kiểm tra cả bài."
+    });
   }
 
   // ============================ LUYỆN TỐC ĐỘ ============================
@@ -1176,9 +1207,9 @@
 
   // Đọc càng nhiều thì hỏi càng nhiều, trong khoảng 3–8 câu — bài ngắn 5 câu
   // cố định vừa thừa vừa dễ trùng ý, bài dài 5 câu lại quá ít để đại diện.
-  function quizCount() {
-    const wordsRead = (state.idx + 1) * state.chunkSize;
-    return Math.max(3, Math.min(8, Math.round(wordsRead / 120)));
+  function quizCount(scope) {
+    const tokens = scope === "all" ? state.tokens.length : state.idx + 1;
+    return Math.max(3, Math.min(8, Math.round((tokens * state.chunkSize) / 120)));
   }
 
   function highlightAnswer(sentence, answer) {
@@ -1189,34 +1220,63 @@
 
   // opts: { from, count, title, onGraded } — dùng cho chế độ luyện (hỏi riêng
   // một vòng). Gọi openQuiz() không tham số vẫn giữ nguyên hành vi phím Q.
+  // opts: { from, upTo, count, title, emptyMsg, onGraded, scope }
+  // Gọi openQuiz() không tham số vẫn giữ nguyên hành vi phím Q.
   function openQuiz(opts) {
     const o = opts || {};
+    // scope: "read" = phần đã đọc · "all" = cả bài.
+    // Chưa đọc đủ để ra câu hỏi thì tự chuyển sang cả bài, thay vì bắt người
+    // dùng đọc hết mới được kiểm tra.
+    const fixedRange = o.from !== undefined || o.upTo !== undefined;
+    let scope = o.scope || state.quizScope || "read";
+    if (!fixedRange && scope === "read" && state.idx < 25) scope = "all";
+
     const from = o.from || 0;
-    const qs = E.buildQuiz(state.tokens, state.idx, o.count || quizCount(), state.vietnamese, from);
+    const upTo = o.upTo !== undefined ? o.upTo
+      : (scope === "all" ? state.tokens.length - 1 : state.idx);
+    const count = o.count || (fixedRange ? 4 : quizCount(scope));
+
+    const qs = E.buildQuiz(state.tokens, upTo, count, state.vietnamese, from, state.blocks);
     const body = $("#quizBody");
+    state.quizScope = scope;
+
+    // Bộ chọn phạm vi — chỉ hiện khi đang kiểm tra cả bài chứ không phải một mục
+    const scopeBar = fixedRange ? "" : `
+      <div class="quiz-scope" role="group" aria-label="Phạm vi kiểm tra">
+        <button class="seg${scope === "read" ? " on" : ""}" data-scope="read"
+          ${state.idx < 25 ? "disabled title='Đọc thêm một chút rồi mới kiểm tra riêng phần đã đọc được'" : ""}>Phần đã đọc</button>
+        <button class="seg${scope === "all" ? " on" : ""}" data-scope="all">Cả bài</button>
+      </div>`;
+
     if (!qs.length) {
-      body.innerHTML = '<div class="empty">Chưa đọc đủ nội dung để tạo câu hỏi. Đọc thêm rồi thử lại.</div>';
-      panel("#quiz", true);
-      // Đang luyện mà đoạn này không sinh được câu hỏi thì bỏ qua vòng, đừng
-      // để buổi luyện kẹt cứng ở đây.
+      body.innerHTML = scopeBar + '<div class="empty">' +
+        esc(o.emptyMsg || "Nội dung quá ngắn để tạo câu hỏi có nghĩa.") + '</div>';
+      wireScope(body, o);
       if (o.onGraded) setTimeout(() => o.onGraded(0, 0), 50);
+      panel("#quiz", true);
       return;
     }
-    state.quiz = { questions: qs, answers: {}, onGraded: o.onGraded };
+    state.quiz = { questions: qs, answers: {}, onGraded: o.onGraded, opts: o };
 
     body.innerHTML = `
       ${o.title ? `<div class="quiz-round">${esc(o.title)}</div>` : ""}
+      ${scopeBar}
       <p class="quiz-intro">Điền từ còn thiếu. Đây là cách tự kiểm tra xem bạn thật sự hiểu hay chỉ đang nhìn chữ chạy.</p>
       ${qs.map((q, i) => `
         <div class="quiz-q" data-q="${q.id}">
-          <div class="quiz-prompt"><b>${i + 1}.</b> ${esc(q.prompt)}</div>
+          <div class="quiz-prompt">
+            <b>${i + 1}.</b>${q.label ? `<span class="quiz-kind">${esc(q.label)}</span>` : ""}
+            ${esc(q.prompt)}
+          </div>
           <div class="quiz-opts">
-            ${q.options.map((o) => `<button class="quiz-opt" data-q="${q.id}" data-v="${esc(o)}">${esc(o)}</button>`).join("")}
+            ${q.options.map((x) => `<button class="quiz-opt" data-q="${q.id}" data-v="${esc(x)}">${esc(x)}</button>`).join("")}
           </div>
           <div class="quiz-context" data-q="${q.id}" hidden></div>
         </div>`).join("")}
       <button class="primary" id="quizSubmit">Chấm điểm</button>
       <div class="quiz-result" id="quizResult" hidden></div>`;
+
+    wireScope(body, o);
 
     const submit = body.querySelector("#quizSubmit");
     // Chấm khi chưa chọn hết thì mọi câu bỏ trống đều tính sai, và điểm 0 đó
@@ -1242,6 +1302,16 @@
     submit.addEventListener("click", gradeQuiz);
     refreshSubmit();
     panel("#quiz", true);
+  }
+
+  // Đổi phạm vi hoặc bấm "bộ câu khác" đều là sinh lại bài kiểm tra
+  function wireScope(body, o) {
+    body.querySelectorAll("[data-scope]").forEach((b) =>
+      b.addEventListener("click", () => {
+        if (b.disabled) return;
+        openQuiz({ ...o, scope: b.dataset.scope });
+      })
+    );
   }
 
   function gradeQuiz() {
@@ -1283,6 +1353,17 @@
     r.innerHTML = `<b>${score}/${questions.length}</b> đúng (${pct}%) ở tốc độ ${state.wpm} WPM.<br><span>${advice}</span>`;
     $("#quizSubmit").disabled = true;
 
+    // Mỗi lần sinh lại là một bộ câu hỏi khác — làm lại được ngay để ôn thêm
+    if (!state.quiz.onGraded) {
+      const again = document.createElement("button");
+      again.className = "quiz-review";
+      again.id = "quizAgain";
+      again.textContent = "↻ Bộ câu hỏi khác";
+      again.style.marginTop = "12px";
+      again.addEventListener("click", () => openQuiz(state.quiz.opts || {}));
+      r.appendChild(again);
+    }
+
     recordQuiz(score, questions.length);
 
     // Chế độ luyện: báo điểm về để chuyển sang vòng kế tiếp
@@ -1304,9 +1385,22 @@
   // Phím H lưu nguyên câu đang đọc vào danh sách của tài liệu, xuất được ra
   // Markdown để dán vào ghi chú. Lưu ở storage.local, không gửi đi đâu.
 
+  const isHeadingBlock = (bi) => {
+    const b = state.blocks[bi];
+    return !!b && b.type === "h";
+  };
+
   function currentSentence() {
     if (!state.tokens.length) return null;
-    const cur = state.tokens[state.idx];
+    let at = state.idx;
+    // Đang đứng ở tiêu đề thì lưu cái nhan đề là vô nghĩa — nhảy tới câu nội
+    // dung đầu tiên của mục đó.
+    if (isHeadingBlock((state.tokens[at] || {}).block)) {
+      let j = at;
+      while (j < state.tokens.length && isHeadingBlock(state.tokens[j].block)) j++;
+      if (j < state.tokens.length) at = j;
+    }
+    const cur = state.tokens[at];
     if (!cur) return null;
     const sameBlock = (i) => !!state.tokens[i] && state.tokens[i].block === cur.block;
 
@@ -1317,8 +1411,8 @@
     // Đồng thời không cho câu vắt qua ranh giới khối: tiêu đề không có dấu
     // chấm, nên nếu không chặn thì trích đoạn sẽ dính nguyên tiêu đề vào câu
     // đầu của đoạn ngay sau nó.
-    let from = E.sentenceStart(state.tokens, state.idx);
-    while (from < state.idx && !sameBlock(from)) from++;
+    let from = E.sentenceStart(state.tokens, at);
+    while (from < at && !sameBlock(from)) from++;
 
     let to = from;
     while (to < state.tokens.length && sameBlock(to) &&
@@ -1338,11 +1432,20 @@
       const d = await chrome.storage.local.get(hlKey());
       state.highlights = d[hlKey()] || [];
     } catch (e) {}
+    paintHlCount();
   }
 
   function persistHighlights() {
     if (!state.docKey) return;
     quiet(chrome.storage.local.set({ [hlKey()]: state.highlights }));
+    paintHlCount();
+  }
+
+  function paintHlCount() {
+    const el = $("#hlCount");
+    if (!el) return;
+    el.textContent = state.highlights.length;
+    el.hidden = state.highlights.length === 0;
   }
 
   function addHighlight() {
@@ -1368,6 +1471,13 @@
     flashTimer = setTimeout(() => { el.hidden = true; }, 1800);
   }
 
+  function wireHlSave(body) {
+    const b = body.querySelector("#hlSave");
+    if (b) b.addEventListener("click", () => { addHighlight(); renderHighlights(); });
+  }
+
+  const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trim() + "…" : t);
+
   function highlightsMarkdown() {
     const head = "# " + (state.docTitle || "Trích đoạn") + "\n\n" +
       (state.docUrl ? state.docUrl + "\n\n" : "");
@@ -1380,12 +1490,23 @@
 
   function renderHighlights() {
     const body = $("#hlBody");
+    // Nút lưu phải có mặt kể cả khi danh sách rỗng: nút dấu trang trên thanh
+    // tiêu đề chỉ MỞ danh sách chứ không lưu, mà phím H thì không ai đoán ra —
+    // trước đây người dùng mở bảng, thấy rỗng, tưởng tính năng hỏng.
+    const cur = currentSentence();
+    const saveBtn =
+      '<button class="primary hl-save" id="hlSave" style="margin-top:0">＋ Lưu câu đang đọc</button>' +
+      (cur ? '<div class="hl-preview">“' + esc(cut(cur.text, 150)) + '”</div>' : "");
+
     if (!state.highlights.length) {
-      body.innerHTML = '<div class="empty">Chưa lưu trích đoạn nào. Đang đọc, bấm <b>H</b> để lưu lại câu hiện tại.</div>';
+      body.innerHTML = saveBtn +
+        '<div class="empty" style="margin-top:14px">Chưa lưu trích đoạn nào. ' +
+        'Bấm nút trên, hoặc nhấn <b>H</b> bất cứ lúc nào đang đọc.</div>';
+      wireHlSave(body);
       return;
     }
-    body.innerHTML =
-      '<p class="quiz-intro">' + state.highlights.length +
+    body.innerHTML = saveBtn +
+      '<p class="quiz-intro" style="margin-top:16px">' + state.highlights.length +
       ' trích đoạn từ bài này. Bấm vào một câu để nhảy về đúng chỗ đó.</p>' +
       '<div class="hl-list">' +
       state.highlights.map(function (h, i) {
@@ -1401,6 +1522,7 @@
       '<button class="quiz-review" id="hlClear">Xoá hết</button>' +
       '</div>';
 
+    wireHlSave(body);
     body.querySelectorAll(".hl-text").forEach(function (b) {
       b.addEventListener("click", function () {
         jumpTo(parseInt(b.dataset.token, 10));
@@ -1621,9 +1743,13 @@
     state.tokens = E.buildTokens(blocks, state.chunkSize);
     // Trang xem PDF luôn có cùng URL nên mọi file PDF mở từ máy sẽ dùng chung
     // một khoá tiến trình — thêm tên tài liệu vào khoá để tách chúng ra.
-    state.docKey = ((location.href.split("#")[0] || "") +
+    // Ở chế độ cửa sổ riêng, location.href là URL của chính trang reader.html
+    // kèm mã tài liệu — đổi mỗi lần mở. Lấy nó làm khoá thì tiến trình đọc và
+    // thư viện hỏng hoàn toàn. Dùng URL trang gốc mà background gửi kèm.
+    const baseUrl = ex.url || (location.href.split("#")[0] || "");
+    state.docKey = (baseUrl +
       (ex.source === "pdf" ? "#" + (ex.title || "") : "")).slice(0, 300);
-    state.docUrl = location.href.split("#")[0] || "";
+    state.docUrl = baseUrl;
     state.docTitle = (ex.title || state.docUrl || "Không tên").slice(0, 200);
     state.docKind = ex.source !== "pdf" ? "web"
       : (/[?&]file=/.test(location.search) ? "pdf-url" : "pdf-local");
@@ -1683,6 +1809,13 @@
     recordSession();
     flushWrites();
     state.open = false;
+    // Cửa sổ đọc riêng: đóng trình đọc nghĩa là đóng hẳn cửa sổ, chứ không
+    // phải ẩn overlay đi để lộ ra một trang trắng.
+    if (window.__lampCloseAction === "window") {
+      flushWrites();
+      setTimeout(() => window.close(), 60);
+      return;
+    }
     if (state.host) state.host.style.display = "none";
     document.documentElement.style.overflow = state.prevOverflow || "";
     // Trả con trỏ bàn phím về đúng chỗ người dùng đang đứng trước khi mở

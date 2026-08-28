@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lamp — Đọc nhanh</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #14120E; }
+  /* Overlay của reader.js phủ kín cửa sổ; phần dưới đây chỉ hiện khi chưa nạp
+     được nội dung (mở nhầm URL, phiên đã hết hạn…). */
+  .fallback {
+    height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px; padding: 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #AFA48E; text-align: center;
+  }
+  .fallback h1 { font-family: Georgia, serif; font-size: 22px; margin: 0; color: #FFC978; }
+  .fallback p { font-size: 13.5px; line-height: 1.6; max-width: 380px; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="fallback" id="fallback" hidden>
+    <h1>Lamp</h1>
+    <p id="fallbackMsg">Không còn nội dung để đọc. Hãy quay lại trang web và nhấn <b>Alt+R</b> lần nữa.</p>
+  </div>
+
+  <script>
+    // Báo cho reader.js biết đây là CỬA SỔ RIÊNG, không phải overlay trên trang
+    // web: đóng trình đọc nghĩa là đóng hẳn cửa sổ.
+    window.__lampCloseAction = "window";
+  </script>
+  <script src="../content/defaults.js"></script>
+  <script src="../content/engine.js"></script>
+  <script src="../content/reader.js"></script>
+  <script src="boot.js"></script>
+</body>
+</html>

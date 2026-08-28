@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8"><title>Lamp — kiểm thử cửa sổ đọc riêng</title>
+<style>
+ body{font:14px/1.6 -apple-system,system-ui,sans-serif;margin:20px;background:#111;color:#ddd}
+ #log{white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:12.5px}
+ .ok{color:#6bd06b}.fail{color:#ff6b6b;font-weight:700}.head{color:#f2a93b;margin-top:10px;display:block}
+ iframe{width:520px;height:560px;border:1px solid #333;float:right;background:#14120E}
+</style></head><body>
+<iframe id="frame"></iframe>
+<div id="log"></div>
+<script>
+const log=document.getElementById("log");let pass=0,fail=0;const failed=[];
+function head(t){log.innerHTML+=`<span class="head">== ${t} ==</span>\n`}
+function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</span>\n`}
+ else{fail++;failed.push(n);log.innerHTML+=`<span class="fail">  FAIL ${n}${e?"  → "+e:""}</span>\n`}}
+function note(t){log.innerHTML+=`<span style="color:#888">       ${t}</span>\n`}
+const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+
+const PAGE_URL = "https://bao-mau.vn/bai-viet-1";
+const DOC = {
+  title: "Trí tuệ nhân tạo và tương lai công việc",
+  source: "main",
+  url: PAGE_URL,          // background gắn URL trang GỐC vào đây
+  blocks: [
+    {text:"Trí tuệ nhân tạo và tương lai công việc",type:"h",heading:true,level:1},
+    {text:"Trí tuệ nhân tạo đang thay đổi cách con người làm việc mỗi ngày một cách sâu sắc và rõ rệt. Nhiều công ty công nghệ lớn đã đầu tư 45 tỷ đô la vào nghiên cứu học máy trong năm qua.",type:"p"},
+    {text:"Triển vọng phát triển",type:"h",heading:true,level:2},
+    {text:"Các nhà khoa học tin rằng công nghệ này sẽ tiếp tục phát triển nhanh chóng trong thập kỷ tới. Tuy nhiên, một số chuyên gia cảnh báo rằng việc ứng dụng thiếu kiểm soát có thể gây ra rủi ro nghiêm trọng cho xã hội.",type:"p"},
+    {text:"Quản lý và giáo dục",type:"h",heading:true,level:2},
+    {text:"Chính phủ nhiều quốc gia đang soạn thảo những quy định mới để quản lý lĩnh vực này chặt chẽ hơn trước. Người lao động cũng cần trang bị thêm kỹ năng mới để thích nghi với thị trường việc làm đang biến động.",type:"p"},
+    {text:"Kết luận",type:"h",heading:true,level:2},
+    {text:"Giáo dục đóng vai trò quan trọng trong việc chuẩn bị cho thế hệ tương lai đối mặt với những thách thức chưa từng có trước đây.",type:"p"}
+  ]
+};
+
+window.__state = { sync:{}, local:{}, session:{ "doc:TEST1": DOC }, closed:false };
+
+fetch("../lamp-reader/reader/reader.html").then(r=>r.text()).then(html=>{
+  const stub = `<script>
+    const S = parent.__state;
+    const pick = (bag,q)=>{ if(q===null||q===undefined) return {...bag};
+      if(typeof q==="string") return q in bag?{[q]:bag[q]}:{};
+      if(Array.isArray(q)){const o={};q.forEach(k=>{if(k in bag)o[k]=bag[k];});return o;}
+      const o={};Object.keys(q).forEach(k=>(o[k]= k in bag?bag[k]:q[k]));return o; };
+    const area = (name)=>({
+      get: async q=>pick(S[name],q),
+      set: async o=>Object.assign(S[name],o),
+      remove: async k=>(Array.isArray(k)?k:[k]).forEach(x=>delete S[name][x])
+    });
+    window.chrome = {
+      runtime:{ getURL:p=>"../lamp-reader/"+p+(p.endsWith(".css")?"?v="+Date.now():""),
+                onMessage:{addListener(){}} },
+      storage:{ sync:area("sync"), local:area("local"), session:area("session") }
+    };
+    // boot.js đọc mã tài liệu từ query string; iframe srcdoc không có query nên
+    // giả lập lại đúng chỗ đó, phần còn lại của boot.js chạy y như thật.
+    const _USP = window.URLSearchParams;
+    window.URLSearchParams = function(s){ return new _USP(s || "?doc=TEST1"); };
+    window.close = ()=>{ parent.__state.closed = true; };
+  <\/script>`;
+  html = html.replace("<body>", "<body>" + stub)
+             .replace(/src="\.\.\/content\//g, 'src="../lamp-reader/content/')
+             .replace('src="boot.js"', 'src="../lamp-reader/reader/boot.js"');
+  // chống cache
+  html = html.replace(/src="(\.\.\/lamp-reader\/[^"]+)"/g, (m,p)=>`src="${p}?v=${Date.now()}"`);
+  document.getElementById("frame").srcdoc = html;
+});
+
+document.getElementById("frame").addEventListener("load", async function(){
+  const S = window.__state;
+  const win = this.contentWindow, doc = this.contentDocument;
+  await wait(700);
+  const host = doc.getElementById("lamp-reader-host");
+  const R = host && host.shadowRoot;
+  const $ = (s)=>R.querySelector(s);
+  const $$ = (s)=>Array.from(R.querySelectorAll(s));
+  const key = (k)=>win.KeyboardEvent && doc.dispatchEvent(new win.KeyboardEvent("keydown",{key:k,bubbles:true}));
+
+  head("khởi động cửa sổ đọc riêng");
+  ok("boot nạp được tài liệu từ storage.session", !!host, "overlay chưa dựng");
+  if(!host){ finish(); return; }
+  ok("không hiện màn hình báo lỗi", doc.getElementById("fallback").hidden === true);
+  ok("mã tài liệu bị xoá khỏi session sau khi dùng", !S.session["doc:TEST1"]);
+  ok("tiêu đề cửa sổ theo tên bài", /Trí tuệ nhân tạo/.test(doc.title), doc.title);
+  ok("có token để đọc", $("#pos").textContent !== "0 / 0", $("#pos").textContent);
+  ok("biết mình đang ở cửa sổ riêng", win.__lampCloseAction === "window");
+
+  head("khoá lưu tiến trình phải bám URL TRANG GỐC");
+  key("ArrowRight"); await wait(700);
+  const posKeys = Object.keys(S.local).filter(k=>k.startsWith("pos:"));
+  note("khoá đã lưu: " + JSON.stringify(posKeys));
+  ok("có lưu tiến trình", posKeys.length === 1, posKeys.join(","));
+  ok("khoá là URL trang gốc, KHÔNG phải URL reader.html",
+     posKeys[0] === "pos:" + PAGE_URL, posKeys[0]);
+  ok("bản ghi mang url trang gốc", (S.local[posKeys[0]]||{}).url === PAGE_URL);
+
+  head("LƯU TRÍCH ĐOẠN (phím H)");
+  key("r"); await wait(80);
+  key("h"); await wait(150);
+  note("thông báo: " + JSON.stringify($("#flash").textContent));
+  ok("hiện thông báo sau khi bấm H", $("#flash").hidden === false, "flash không hiện");
+  ok("thông báo báo ĐÃ LƯU", /Đã lưu/.test($("#flash").textContent), $("#flash").textContent);
+
+  const hlKeys = Object.keys(S.local).filter(k=>k.startsWith("hl:"));
+  note("khoá trích đoạn: " + JSON.stringify(hlKeys));
+  ok("trích đoạn được ghi vào storage", hlKeys.length === 1, hlKeys.join(","));
+  ok("khoá trích đoạn cũng bám URL gốc", hlKeys[0] === "hl:" + PAGE_URL, hlKeys[0]);
+  const saved = S.local[hlKeys[0]] || [];
+  ok("có đúng 1 trích đoạn", saved.length === 1, JSON.stringify(saved).slice(0,120));
+  ok("trích đoạn có nội dung thật", saved[0] && saved[0].text && saved[0].text.length > 20,
+     JSON.stringify(saved[0]));
+  note("nội dung: " + JSON.stringify((saved[0]||{}).text || ""));
+
+  head("bảng trích đoạn hiển thị được");
+  $("#hlBtn").click(); await wait(150);
+  ok("bảng mở ra", $("#highlights").hidden === false);
+  ok("liệt kê đúng số trích đoạn", $$(".hl-item").length === saved.length,
+     `${$$(".hl-item").length} vs ${saved.length}`);
+  ok("có nút chép Markdown", !!$("#hlCopy"));
+  $("#hlClose").click(); await wait(60);
+
+  head("trích đoạn SỐNG SÓT qua lần mở lại");
+  // mô phỏng mở lại cùng bài: đóng rồi open() lần nữa với cùng doc
+  win.__lampReader.close(); await wait(150);
+  S.session["doc:TEST1"] = DOC;
+  win.__lampExtract = () => DOC;
+  await win.__lampReader.open(await (async()=>S.sync)());
+  await wait(300);
+  $("#hlBtn").click(); await wait(150);
+  ok("mở lại vẫn thấy trích đoạn cũ", $$(".hl-item").length === saved.length,
+     `${$$(".hl-item").length} vs ${saved.length}`);
+  $("#hlClose").click(); await wait(60);
+
+  head("đóng trình đọc = đóng cửa sổ");
+  win.__lampReader.close();
+  await wait(300);
+  ok("gọi window.close()", S.closed === true, "cửa sổ không đóng");
+
+  finish();
+  function finish(){
+    log.innerHTML += `\n<span class="${fail?"fail":"ok"}">${pass} passed, ${fail} failed</span>\n`;
+    window.__winTestResult={pass,fail,failed};
+  }
+}, {once:true});
+
+window.addEventListener("error",e=>{
+  log.innerHTML+=`<span class="fail">THROWN: ${e.message}</span>\n`;
+  window.__winTestResult={pass,fail:fail+1,failed:failed.concat("THROWN: "+e.message)};
+});
+window.addEventListener("unhandledrejection",e=>{
+  log.innerHTML+=`<span class="fail">REJECTED: ${e.reason}</span>\n`;
+  window.__winTestResult={pass,fail:fail+1,failed:failed.concat("REJECTED: "+e.reason)};
+});
+</script>
+</body></html>
