@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
 <meta charset="UTF-8">
 <style>
@@ -160,59 +160,57 @@
     <h1>Lamp</h1>
     <span>RSVP</span>
   </div>
-  <div class="sub">Đọc nhanh trang hiện tại, đoạn đang bôi đen, hoặc một file PDF.</div>
+  <div class="sub" data-i18n="pop.sub"></div>
 
-  <button class="start" id="start">Đọc trang này</button>
-  <button class="pdf" id="openPdf">Đọc file PDF…</button>
+  <button class="start" id="start" data-i18n="pop.start"></button>
+  <button class="pdf" id="openPdf" data-i18n="pop.pdf"></button>
   <div class="err" id="err"></div>
 
   <div class="panel">
     <div class="row">
-      <span class="row-label">Tốc độ</span>
+      <span class="row-label" data-i18n="dock.speed"></span>
       <div class="stepper-box">
-        <button data-step="wpm:-1" aria-label="Giảm tốc độ">−</button>
+        <button data-step="wpm:-1" data-i18n-aria="a11y.dec|dock.speed">−</button>
         <span class="val"><b id="wpmVal">350</b><em>WPM</em></span>
-        <button data-step="wpm:1" aria-label="Tăng tốc độ">+</button>
+        <button data-step="wpm:1" data-i18n-aria="a11y.inc|dock.speed">+</button>
       </div>
     </div>
     <div class="row">
-      <span class="row-label">Từ mỗi lần</span>
+      <span class="row-label" data-i18n="dock.chunk"></span>
       <div class="stepper-box">
-        <button data-step="chunk:-1" aria-label="Giảm số từ">−</button>
+        <button data-step="chunk:-1" data-i18n-aria="a11y.dec|dock.chunk">−</button>
         <span class="val"><b id="chunkVal">1</b></span>
-        <button data-step="chunk:1" aria-label="Tăng số từ">+</button>
+        <button data-step="chunk:1" data-i18n-aria="a11y.inc|dock.chunk">+</button>
       </div>
     </div>
     <div class="row">
-      <span class="row-label">Cỡ chữ</span>
+      <span class="row-label" data-i18n="dock.size"></span>
       <div class="stepper-box">
-        <button data-step="size:-1" aria-label="Giảm cỡ chữ">−</button>
+        <button data-step="size:-1" data-i18n-aria="a11y.dec|dock.size">−</button>
         <span class="val"><b id="sizeVal">56</b><em>px</em></span>
-        <button data-step="size:1" aria-label="Tăng cỡ chữ">+</button>
+        <button data-step="size:1" data-i18n-aria="a11y.inc|dock.size">+</button>
       </div>
     </div>
   </div>
 
   <div class="sec-label">
-    <span>Đang đọc dở</span>
-    <button id="libClear" hidden>Xoá hết</button>
+    <span data-i18n="pop.libTitle"></span>
+    <button id="libClear" hidden data-i18n="btn.clearAll"></button>
   </div>
   <div class="lib" id="lib"></div>
 
   <div class="perm" id="perm">
     <div class="perm-text">
-      <b>Đọc tiếp trên mọi trang</b>
-      <span id="permDesc">Cần cấp quyền để mở lại bài từ danh sách trên.</span>
+      <b data-i18n="pop.permTitle"></b>
+      <span id="permDesc"></span>
     </div>
-    <button class="perm-btn" id="permBtn">Cấp quyền</button>
+    <button class="perm-btn" id="permBtn"></button>
   </div>
 
-  <div class="foot">
-    <b>Alt+R</b> mở nhanh trên mọi trang. Bôi đen một đoạn rồi chuột phải để đọc riêng đoạn đó.<br>
-    Phông chữ, giao diện và các tuỳ chọn khác nằm ở nút <b>⚙</b> trong trình đọc.
-  </div>
+  <div class="foot" data-i18n-html="pop.foot"></div>
 
   <script src="../content/defaults.js"></script>
+  <script src="../content/i18n.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

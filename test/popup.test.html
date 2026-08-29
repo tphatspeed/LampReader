@@ -38,11 +38,13 @@ window.__state = {
       title: "Bài đã đọc gần xong", url: "https://c.com/xong", kind: "web", pct: 98 },
     "stats": { days: {}, quizzes: [] }
   },
-  sync: {},
+  // Cố định ngôn ngữ để các phép so chuỗi ổn định, không phụ thuộc trình duyệt
+  sync: { lang: "vi" },
   granted: false,          // đã cấp <all_urls> chưa
   requested: [],           // các lần gọi permissions.request
   tabsCreated: [],
-  messages: []
+  messages: [],
+  syncWrites: []          // đếm số LƯỢT ghi storage.sync, để kiểm việc gom nhịp
 };
 
 fetch("../lamp-reader/popup/popup.html").then(r => r.text()).then(html => {
@@ -65,7 +67,8 @@ fetch("../lamp-reader/popup/popup.html").then(r => r.text()).then(html => {
         query: async () => [{ id: 1, url: "https://cur.com/x" }]
       },
       storage: {
-        sync:  { get: async q => pick(S.sync, q),  set: async o => Object.assign(S.sync, o) },
+        sync:  { get: async q => pick(S.sync, q),
+                 set: async o => { S.syncWrites.push(o); Object.assign(S.sync, o); } },
         local: {
           get: async q => pick(S.local, q),
           set: async o => Object.assign(S.local, o),
@@ -81,15 +84,20 @@ fetch("../lamp-reader/popup/popup.html").then(r => r.text()).then(html => {
     window.close = () => { parent.__state.closed = true; };
   <\/script>`;
 
+  // Viết lại MỌI đường dẫn ../content/* và popup.js cho đúng vị trí từ test/,
+  // kèm ?v= chống cache. Dùng regex để thêm script mới vào popup.html không
+  // phải nhớ sửa chỗ này (đã quên một lần với i18n.js).
+  const v = Date.now();
   html = html.replace("<body>", "<body>" + stub)
-             .replace('src="../content/defaults.js"', 'src="../lamp-reader/content/defaults.js?v=' + Date.now() + '"')
-             .replace('src="popup.js"', 'src="../lamp-reader/popup/popup.js?v=' + Date.now() + '"');
+             .replace(/src="\.\.\/content\/([^"]+)"/g, `src="../lamp-reader/content/$1?v=${v}"`)
+             .replace(/src="popup\.js"/, `src="../lamp-reader/popup/popup.js?v=${v}"`);
   document.getElementById("frame").srcdoc = html;
 });
 
 document.getElementById("frame").addEventListener("load", async function run() {
   const S = window.__state;
   const doc = this.contentDocument;
+  const win = this.contentWindow;
   const $ = (id) => doc.getElementById(id);
   const $$ = (s) => Array.from(doc.querySelectorAll(s));
   await wait(300);
@@ -154,6 +162,19 @@ document.getElementById("frame").addEventListener("load", async function run() {
   ok("bấm lần nữa thì thu hồi", S.granted === false);
   ok("nhãn về lại Cấp quyền", $("permBtn").textContent === "Cấp quyền");
 
+  head("đa ngôn ngữ trong popup");
+  {
+    ok("chữ tĩnh được dịch, không còn rỗng", $("start").textContent.trim().length > 0,
+       JSON.stringify($("start").textContent));
+    ok("đang là tiếng Việt", $("start").textContent === "Đọc trang này", $("start").textContent);
+    ok("aria-label được dịch", /Giảm|Tăng/.test($$("[data-i18n-aria]")[0].getAttribute("aria-label")),
+       $$("[data-i18n-aria]")[0].getAttribute("aria-label"));
+    ok("không còn phần tử data-i18n nào rỗng",
+       $$("[data-i18n]").every(e => e.textContent.trim().length > 0),
+       $$("[data-i18n]").filter(e => !e.textContent.trim()).map(e => e.dataset.i18n).join(","));
+    ok("thẻ html mang mã ngôn ngữ", doc.documentElement.lang === "vi", doc.documentElement.lang);
+  }
+
   head("xoá hết");
   $("libClear").click();
   await wait(200);
@@ -161,6 +182,48 @@ document.getElementById("frame").addEventListener("load", async function run() {
   ok("hiện lời nhắc khi rỗng", !!doc.querySelector(".lib-empty"));
   ok("không xoá nhầm thống kê", !!S.local.stats, "stats bị xoá!");
   ok("nút Xoá hết tự ẩn", $("libClear").hidden === true);
+
+  head("chỉnh cài đặt: gom nhịp ghi storage.sync");
+  {
+    // chrome.storage.sync chỉ cho 120 lượt ghi mỗi phút. Bấm +/- liên tục mà
+    // ghi thẳng là chạm trần, và khi chạm Chrome bỏ qua lượt ghi trong im lặng.
+    S.syncWrites.length = 0;
+    const plus = doc.querySelector('[data-step="wpm:1"]');
+    ok("có nút tăng tốc độ", !!plus);
+    const truoc = +$("wpmVal").textContent;
+    for (let i = 0; i < 12; i++) plus.click();
+    ok("số hiện lên đổi ngay, không chờ ghi", +$("wpmVal").textContent > truoc,
+       $("wpmVal").textContent);
+    ok("12 cú bấm KHÔNG thành 12 lượt ghi", S.syncWrites.length === 0,
+       S.syncWrites.length + " lượt ghi ngay lập tức");
+    await wait(500);
+    ok("gom lại còn đúng một lượt ghi", S.syncWrites.length === 1,
+       S.syncWrites.length + " lượt");
+    ok("ghi đúng giá trị cuối",
+       S.syncWrites[0] && S.syncWrites[0].wpm === +$("wpmVal").textContent,
+       JSON.stringify(S.syncWrites[0] && S.syncWrites[0].wpm));
+  }
+
+  head("đóng popup giữa chừng vẫn kịp lưu");
+  {
+    // Gom nhịp mà không xả lúc đóng thì còn tệ hơn không gom: popup tắt gần
+    // như tức thì sau cú bấm cuối, thay đổi cuối cùng sẽ bay mất.
+    S.syncWrites.length = 0;
+    const plus = doc.querySelector('[data-step="size:1"]');
+    plus.click();
+    const cuoi = +$("sizeVal").textContent;
+    ok("chưa ghi ngay", S.syncWrites.length === 0);
+    win.dispatchEvent(new win.Event("pagehide"));
+    await wait(50);
+    ok("pagehide xả nốt lượt ghi", S.syncWrites.length === 1, S.syncWrites.length + " lượt");
+    ok("giữ đúng cỡ chữ vừa chỉnh",
+       S.syncWrites[0] && S.syncWrites[0].fontSize === cuoi,
+       JSON.stringify(S.syncWrites[0] && S.syncWrites[0].fontSize));
+    S.syncWrites.length = 0;
+    win.dispatchEvent(new win.Event("pagehide"));
+    await wait(50);
+    ok("không có gì mới thì không ghi thừa", S.syncWrites.length === 0);
+  }
 
   log.innerHTML += `\n<span class="${fail ? "fail" : "ok"}">${pass} passed, ${fail} failed</span>\n`;
   window.__popupTestResult = { pass, fail, failed };

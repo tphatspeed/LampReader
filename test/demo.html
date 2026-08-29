@@ -50,7 +50,7 @@ window.chrome = {
 // Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
 (function () {
   var v = Date.now();
-  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
+  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/i18n.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
     document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
   });
 })();

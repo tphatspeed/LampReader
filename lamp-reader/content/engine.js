@@ -10,6 +10,7 @@
   // là một âm tiết, trong khi một từ có nghĩa hay gồm 2 âm tiết ("nghiên cứu").
   // Vì vậy cùng một mức WPM, tiếng Việt trôi nhanh hơn tiếng Anh về mặt ý.
   const VI_RE = /[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i;
+  const CJK_RE = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af]/;
 
   function detectVietnamese(text) {
     const sample = text.slice(0, 4000);
@@ -17,20 +18,84 @@
     return hits / Math.max(1, sample.length) > 0.02;
   }
 
-  const CLAUSE_END = /[.!?…]["')\]]?$/;
+  // ---------- Hồ sơ theo NGÔN NGỮ CỦA NỘI DUNG ----------
+  // Khác hẳn ngôn ngữ giao diện: bài tiếng Anh đọc trong giao diện tiếng Việt
+  // vẫn phải chạy theo nhịp tiếng Anh. Trước đây chỉ có cờ nhị phân
+  // "vietnamese hay không", nên mọi thứ không phải tiếng Việt đều bị gom làm
+  // một — kể cả tiếng Trung/Nhật vốn không tách từ bằng dấu cách.
+  //
+  //   pace   : hệ số nhịp. Tiếng Việt đơn âm tiết nên cùng WPM trôi nhanh hơn
+  //            về mặt ý → chậm lại 15%. CJK mỗi "từ" là một chữ mang nhiều
+  //            nghĩa hơn nữa → chậm hơn nhiều.
+  //   cloze  : số đơn vị bị khoét khi sinh câu hỏi điền từ
+  //   stop   : từ đệm của riêng ngôn ngữ đó
+  //   ttsLang: tiền tố mã giọng đọc nên ưu tiên
+  const STOP_VI = ("và là của có được cho những các một trong với khi này đó thì mà nhưng " +
+    "để từ như về vì nên hay hoặc cũng đã sẽ đang rất nhiều ít không phải bị bởi tại trên dưới").split(/\s+/);
+  const STOP_EN = ("the a an and or but of to in on for with that this these those is are was were " +
+    "be been have has had will would can could should may might do does did not it its as at by from").split(/\s+/);
+
+  const PROFILES = {
+    vi: { pace: 0.85, cloze: 2, stop: STOP_VI.concat(STOP_EN), ttsLang: "vi" },
+    zh: { pace: 0.55, cloze: 1, stop: [], ttsLang: "zh" },
+    en: { pace: 1, cloze: 1, stop: STOP_EN, ttsLang: "en" }
+  };
+
+  // code: mã ngôn ngữ nguồn khai báo (EPUB có dc:language), có thì tin nó
+  function detectLang(text, code) {
+    if (code) {
+      const c = String(code).toLowerCase();
+      if (c.startsWith("vi")) return "vi";
+      if (/^(zh|ja|ko)/.test(c)) return "zh";
+      return "en";
+    }
+    if (detectVietnamese(text)) return "vi";
+    const sample = text.slice(0, 4000);
+    const cjk = (sample.match(new RegExp(CJK_RE.source, "g")) || []).length;
+    if (cjk / Math.max(1, sample.length) > 0.15) return "zh";
+    return "en";
+  }
+
+  const profile = (lang) => PROFILES[lang] || PROFILES.en;
+
+  // Gồm cả dấu câu toàn giác của tiếng Trung/Nhật, nếu không thì cả đoạn
+  // văn CJK thành một "câu" duy nhất.
+  const CLAUSE_END = /[.!?…。！？]["')\]」』]?$/;
   const SOFT_BREAK = /[,;:—–]$/;
   // Từ mở đầu hoặc kết thúc một đoạn trong ngoặc/ngoặc kép — chỉ bắt dấu ở
   // đúng đầu/cuối token (không bắt nháy đơn giữa từ như "don't") để tránh
   // làm chậm nhầm các từ viết tắt bình thường.
   const ASIDE_MARK = /^[([{“‘«]|[)\]}”’»]$/;
 
+  // ---------- Tách từ ----------
+  // Tiếng Trung/Nhật KHÔNG dùng dấu cách để tách từ, nên split(/\s+/) trả về
+  // nguyên cả đoạn văn thành một "từ" — RSVP thành vô dụng. Intl.Segmenter là
+  // bộ tách từ có sẵn của trình duyệt, dùng đúng việc này.
+  //
+  // reader.js PHẢI tách y hệt khi dựng chế độ Dẫn dòng, nếu không chỉ số từ sẽ
+  // lệch và phần tô sáng nhảy lung tung — nên hàm này được xuất ra dùng chung.
+  function splitWords(text, lang) {
+    const plain = text.split(/\s+/).filter(Boolean);
+    if (lang !== "zh") return plain;
+    // Có sẵn dấu cách (văn bản pha tiếng Anh) thì cứ dùng cách thường
+    if (plain.length > text.length / 4) return plain;
+    try {
+      const seg = new Intl.Segmenter("ja", { granularity: "word" });
+      const out = [...seg.segment(text)].map((x) => x.segment).filter((x) => x.trim());
+      if (out.length) return out;
+    } catch (e) { /* trình duyệt cũ — rơi xuống cách dưới */ }
+    return text.split("").filter((c) => c.trim());   // dự phòng: từng chữ một
+  }
+
   // ---------- Token ----------
   // Mỗi token giữ lại vị trí gốc (khối nào, từ thứ mấy) để chế độ dẫn dòng
   // biết cần tô sáng chỗ nào trong văn bản đầy đủ.
-  function buildTokens(blocks, chunkSize) {
+  function buildTokens(blocks, chunkSize, lang) {
+    // CJK viết liền, ghép cụm bằng dấu cách sẽ chèn khoảng trắng không có thật
+    const joiner = lang === "zh" ? "" : " ";
     const tokens = [];
     blocks.forEach((block, bi) => {
-      const words = block.text.split(/\s+/).filter(Boolean);
+      const words = splitWords(block.text, lang);
       let buf = [];
       let from = 0;
       words.forEach((w, wi) => {
@@ -40,7 +105,7 @@
         // Không cho một cụm vắt qua ranh giới câu: não cần mốc cuối câu
         // để tổng hợp nghĩa, ghép "…hết. Câu mới…" vào một khung sẽ phá mốc đó.
         if (buf.length >= chunkSize || CLAUSE_END.test(w) || last) {
-          tokens.push({ text: buf.join(" "), block: bi, from, to: wi });
+          tokens.push({ text: buf.join(joiner), block: bi, from, to: wi });
           buf = [];
         }
       });
@@ -51,18 +116,20 @@
   // ---------- Nhịp ----------
   function tokenDelay(token, i, tokens, opts) {
     const { wpm, rhythm, warmup, vietnamese, shortWords } = opts;
+    // vietnamese giữ lại cho tương thích ngược; ưu tiên opts.lang nếu có
+    const P = profile(opts.lang || (vietnamese ? "vi" : "en"));
 
     let rate = wpm;
     if (warmup && i < 40) rate = wpm * (0.65 + 0.35 * (i / 40));
-    // Âm tiết tiếng Việt ngắn hơn từ tiếng Anh, giữ nguyên WPM sẽ thành quá nhanh
-    if (vietnamese) rate *= 0.85;
+    // Mỗi ngôn ngữ một mật độ ý trên mỗi "từ" khác nhau — xem PROFILES
+    rate *= P.pace;
 
     const wordCount = token.text.split(" ").length;
     let ms = (60000 / rate) * wordCount;
 
     // Từ đệm (và, của, là...) mang ít thông tin — cho lướt qua nhanh hơn thay
     // vì buộc mắt dừng lại bằng đúng thời lượng một từ có nghĩa.
-    if (shortWords && wordCount === 1 && STOP.has(clean(token.text).toLowerCase())) {
+    if (shortWords && wordCount === 1 && P.stop.indexOf(clean(token.text).toLowerCase()) >= 0) {
       ms *= 0.6;
     }
 
@@ -139,11 +206,7 @@
   //
   // Ba dạng sau không thể đoán bằng ngữ pháp: phải thật sự nhớ nội dung.
 
-  const STOP = new Set(("và là của có được cho những các một trong với khi này đó thì mà nhưng " +
-    "để từ như về vì nên hay hoặc cũng đã sẽ đang rất nhiều ít không phải bị bởi tại trên dưới " +
-    "the a an and or but of to in on for with that this these those is are was were be been " +
-    "have has had will would can could should may might do does did not it its as at by from"
-  ).split(/\s+/));
+  const STOP = new Set(STOP_VI.concat(STOP_EN));
 
   const clean = (w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 
@@ -152,11 +215,15 @@
     return c.length >= 4 && !STOP.has(c.toLowerCase()) && /\p{L}/u.test(c);
   }
 
+  // engine.js phải chạy được cả khi i18n chưa nạp (kiểm thử bằng node)
+  const TT = (k, v) => (self.__lampI18n ? self.__lampI18n.t(k, v) : k);
+
   const shuffle = (a) => a.slice().sort(() => Math.random() - 0.5);
   const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trim() + "…" : t);
 
   // ---- Ngữ cảnh dùng chung cho mọi dạng câu hỏi ----
-  function quizContext(tokens, upTo, vietnamese, from, blocks) {
+  function quizContext(tokens, upTo, lang, from, blocks) {
+    const vietnamese = lang === "vi";
     const start = Math.max(0, Math.min(from, tokens.length - 1));
     const read = tokens.slice(start, Math.max(start + 1, upTo + 1));
     if (!read.length) return null;
@@ -280,7 +347,7 @@
 
       used.add(answer.toLowerCase());
       out.push({
-        kind: "cloze", label: "Điền từ",
+        kind: "cloze", label: TT("quiz.kind.cloze"),
         prompt: blanked, answer,
         options: shuffle([answer, ...distractors]),
         token, sentence: sentence.text
@@ -316,7 +383,7 @@
       if (fakes.length < 3) continue;
       used.add("num:" + answer);
       out.push({
-        kind: "number", label: "Số liệu",
+        kind: "number", label: TT("quiz.kind.number"),
         prompt: sentence.words.map((w, i) => (i === idx ? "______" : w)).join(" "),
         answer,
         options: shuffle([answer, ...fakes]),
@@ -359,8 +426,8 @@
 
       used.add("wt:" + sentence.token);
       out.push({
-        kind: "whichtrue", label: "Câu nào đúng",
-        prompt: "Câu nào dưới đây ĐÚNG với bài viết?",
+        kind: "whichtrue", label: TT("quiz.kind.whichtrue"),
+        prompt: TT("quiz.ask.whichtrue"),
         answer: cut(sentence.text, 160),
         options: shuffle([cut(sentence.text, 160), ...variants.slice(0, 3).map((v) => cut(v.text, 160))]),
         token: sentence.token, sentence: sentence.text
@@ -400,8 +467,8 @@
       used.add("mi:" + sec.head);
       const answer = cut(sec.first.text, 140);
       out.push({
-        kind: "mainidea", label: "Ý của mục",
-        prompt: "Mục “" + cut(sec.head, 60) + "” mở đầu bằng ý nào?",
+        kind: "mainidea", label: TT("quiz.kind.mainidea"),
+        prompt: TT("quiz.ask.mainidea", { name: cut(sec.head, 60) }),
         answer,
         options: shuffle([answer, ...others.map((o) => cut(o.first.text, 140))]),
         token: sec.first.token, sentence: sec.first.text
@@ -425,8 +492,8 @@
       const opts = four.map((f) => cut(f.text, 110));
       if (new Set(opts).size < 4) continue;
       out.push({
-        kind: "order", label: "Thứ tự",
-        prompt: "Ý nào được nhắc tới TRƯỚC NHẤT trong phần bạn vừa đọc?",
+        kind: "order", label: TT("quiz.kind.order"),
+        prompt: TT("quiz.ask.order"),
         answer, options: shuffle(opts),
         token: four[0].token, sentence: four[0].text
       });
@@ -438,7 +505,9 @@
   // `from`/`upTo` cho phép hỏi riêng một khoảng (luyện tốc độ, quiz theo mục).
   // `blocks` để dựng câu hỏi về bố cục bài.
   function buildQuiz(tokens, upTo, count = 5, vietnamese = false, from = 0, blocks = null) {
-    const ctx = quizContext(tokens, upTo, vietnamese, from, blocks);
+    // vietnamese có thể là cờ boolean (bản cũ) hoặc mã ngôn ngữ (bản mới)
+    const lang = typeof vietnamese === "string" ? vietnamese : (vietnamese ? "vi" : "en");
+    const ctx = quizContext(tokens, upTo, lang, from, blocks);
     if (!ctx) return [];
 
     const used = new Set();
@@ -476,7 +545,7 @@
   }
 
   window.__lampEngine = {
-    detectVietnamese,
+    detectVietnamese, detectLang, profile, splitWords,
     buildTokens,
     tokenDelay,
     sentenceStart,

@@ -3,6 +3,8 @@
 Trình đọc nhanh RSVP cho Chrome. Trang này là tài liệu đầy đủ; xem
 [README ở gốc](../README.md) nếu chỉ cần giới thiệu ngắn.
 
+*Tài liệu cho phiên bản **2.0.0**.*
+
 **Mục lục**
 
 - [Cài đặt](#cài-đặt) · [Bắt đầu](#bắt-đầu) · [Phím tắt](#phím-tắt)
@@ -13,6 +15,25 @@ Trình đọc nhanh RSVP cho Chrome. Trang này là tài liệu đầy đủ; xe
 - [Dành cho người sửa code](#dành-cho-người-sửa-code)
 
 ---
+
+## Ngôn ngữ
+
+Giao diện có **tiếng Việt và tiếng Anh**, đổi trong bảng cài đặt (mục *Ngôn ngữ
+giao diện*). Mặc định là **Theo trình duyệt**: máy đặt tiếng Việt thì ra tiếng
+Việt, còn lại ra tiếng Anh.
+
+Đây là bộ từ điển riêng của Lamp (`content/i18n.js`) chứ không dùng
+`chrome.i18n` — API đó bám theo ngôn ngữ trình duyệt và **không đổi được lúc
+chạy**, trong khi Lamp cần cho bạn tự chọn.
+
+> **Ngôn ngữ giao diện khác ngôn ngữ nội dung.** Đọc bài tiếng Anh trong giao
+> diện tiếng Việt vẫn chạy đúng nhịp tiếng Anh — xem
+> [Cách Lamp xử lý chữ](#cách-lamp-xử-lý-chữ).
+
+**Thêm một ngôn ngữ mới** — chép khối `en` trong `content/i18n.js`, đổi khoá
+thành mã ngôn ngữ, dịch phần giá trị, rồi thêm tên vào `LANG_NAMES` (viết bằng
+chính ngôn ngữ đó). Bộ chọn trong cài đặt tự liệt kê theo từ điển, không phải
+sửa gì thêm. Khoá nào thiếu thì tự rơi về tiếng Anh nên không sợ vỡ giao diện.
 
 ## Cài đặt
 
@@ -197,17 +218,31 @@ Bảng màu đo theo WCAG (chữ/nền ≥ 7:1). Ghi chú vì sao chọn từng 
 
 ## Cách Lamp xử lý chữ
 
-### Tiếng Việt
+### Ngôn ngữ của nội dung
 
-Ứng dụng tự nhận diện văn bản tiếng Việt qua dấu thanh, rồi **giảm nhịp 15%**. Lý
-do: tiếng Việt là ngôn ngữ đơn âm tiết, mỗi "từ" cách bởi dấu cách thường chỉ là
-một âm tiết, nên cùng một mức WPM thì tiếng Việt trôi nhanh hơn tiếng Anh về mặt ý.
+Lamp tự nhận ra bài đang đọc thuộc ngôn ngữ nào rồi chỉnh cách đọc theo — độc lập
+với ngôn ngữ giao diện. Nguồn nào khai sẵn (EPUB có `dc:language`) thì tin nó,
+không thì đoán qua mặt chữ.
 
-Vì vậy phần kiểm tra hiểu cũng khoét **cả cụm hai âm tiết** thay vì một âm tiết —
-khoét "trực" trong "trực quan" thì câu hỏi vừa dễ vừa vô nghĩa.
+| | Tiếng Việt | Tiếng Anh | Trung / Nhật / Hàn |
+|---|---|---|---|
+| Nhịp đọc | −15% | chuẩn | −45% |
+| Quiz khoét | cụm 2 âm tiết | 1 từ | 1 từ |
+| Tách từ | dấu cách | dấu cách | `Intl.Segmenter` |
+| Giọng đọc ưu tiên | `vi-*` | `en-*` | `zh-*` |
 
-Ước lượng thời gian còn lại và tốc độ giọng đọc đều tính theo nhịp thật (đã trừ
-15%), không lấy thẳng số WPM.
+**Vì sao tiếng Việt chậm hơn:** đây là ngôn ngữ đơn âm tiết, mỗi "từ" cách bởi
+dấu cách thường chỉ là một âm tiết, nên cùng một mức WPM thì trôi nhanh hơn tiếng
+Anh về mặt ý. Cũng vì thế quiz khoét cả cụm hai âm tiết — khoét "trực" trong
+"trực quan" thì câu hỏi vừa dễ vừa vô nghĩa.
+
+**Vì sao CJK cần xử lý riêng:** tiếng Trung/Nhật viết liền, không tách từ bằng
+dấu cách. Cắt theo `split(/\s+/)` sẽ ra nguyên cả đoạn văn thành một "từ" và RSVP
+thành vô dụng, nên Lamp dùng `Intl.Segmenter` — bộ tách từ có sẵn của trình duyệt.
+Dấu câu toàn giác `。！？` cũng được tính là kết câu.
+
+Ước lượng thời gian còn lại và tốc độ giọng đọc đều tính theo nhịp thật của ngôn
+ngữ đó, không lấy thẳng số WPM.
 
 ### Ngoặc, ngoặc kép, dấu câu
 
@@ -319,6 +354,7 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 ├── background.js            Service worker: Alt+R, menu chuột phải, tiêm script
 ├── content/
 │   ├── defaults.js          NGUỒN DUY NHẤT của cài đặt mặc định
+│   ├── i18n.js              Từ điển giao diện (vi/en) + hàm dịch
 │   ├── extractor.js         Tách nội dung chính khỏi menu/quảng cáo/sidebar
 │   ├── engine.js            Logic thuần: token, nhịp đọc, dàn bài, sinh quiz
 │   ├── epub.js              Đọc EPUB: tự giải nén ZIP, đi theo spine
@@ -329,15 +365,22 @@ lamp-reader/                 ← trỏ tới đây khi Load unpacked
 ├── popup/                   Popup khi bấm icon: thư viện, cài đặt nhanh, quyền
 ├── viewer/                  Trang đọc PDF/EPUB riêng
 ├── fonts/                   Be Vietnam Pro, Literata, Noto Serif (nhúng sẵn)
+├── _locales/                Tên & mô tả extension hiện trong Chrome (vi, en)
 ├── vendor/                  pdf.mjs + pdf.worker.mjs
 └── icons/
 
 test/                        ← KHÔNG nằm trong extension
+├── run-all.sh               CHẠY TẤT CẢ bằng một lệnh
+├── run-browser.js           Lái Chrome headless để chạy các bộ .html
+├── swmock.js                Chrome giả lập cho ngữ cảnh service worker
+├── qa.test.js               37 phép — toàn vẹn gói: manifest, _locales, dịch, rác
+├── serviceworker.test.js    77 phép — background.js trong ngữ cảnh SW thật (node)
 ├── engine.test.js           60 phép — logic thuần, chạy bằng node
-├── harness.html            122 phép — trình đọc, chạy thật trong trình duyệt
+├── i18n.test.js             33 phép — từ điển, hồ sơ ngôn ngữ, tách từ CJK (node)
+├── harness.html            136 phép — trình đọc, chạy thật trong trình duyệt
 ├── window.test.html         20 phép — cửa sổ đọc riêng: boot, khoá tài liệu, trích đoạn
-├── popup.test.html          29 phép — popup, thư viện, cấp quyền
-├── epub.test.html           32 phép — đọc EPUB
+├── popup.test.html          43 phép — popup, thư viện, cấp quyền, gom nhịp ghi
+├── epub.test.html           33 phép — đọc EPUB
 ├── pdf.test.html            21 phép — trích xuất PDF, so bản cũ với bản mới
 ├── fixtures/                PDF/EPUB/ZIP mẫu + make_pdf.py (bộ sinh PDF)
 ├── serve.py                 Server tĩnh không cache — dùng cái này để test
@@ -351,44 +394,60 @@ thì chỉ sửa ở đó.
 
 ## Chạy kiểm thử
 
-Tổng cộng **284 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
-`chrome`), không phải bản sao.
-
-Phần logic thuần chạy thẳng bằng node:
+Tổng cộng **460 phép kiểm thử**, chạy trên chính mã nguồn thật (chỉ giả lập API
+`chrome`), không phải bản sao. Một lệnh là xong:
 
 ```bash
-node test/engine.test.js
+bash test/run-all.sh
 ```
 
-Phần tích hợp cần được phục vụ qua HTTP (mở bằng `file://` sẽ bị chặn khi nạp CSS).
-Từ thư mục gốc của dự án:
+Script tự bật server tĩnh, chạy bốn bộ bằng node, rồi chạy năm bộ còn lại trong
+Chrome headless, và tự dọn. Toàn bộ mất khoảng **25 giây**.
+
+Muốn chạy lẻ:
 
 ```bash
-python3 test/serve.py
+node test/qa.test.js              # toàn vẹn gói — chạy trước khi đóng gói
+node test/serviceworker.test.js   # background.js trong ngữ cảnh service worker
+node test/engine.test.js
+node test/i18n.test.js
+```
+
+```bash
+python3 test/serve.py &           # cần cho các bộ chạy trong trình duyệt
+node test/run-browser.js          # chạy hết
+node test/run-browser.js harness  # hoặc một bộ
 ```
 
 Dùng `test/serve.py` chứ đừng dùng `python3 -m http.server`: nó gửi header
 `no-store` để trình duyệt không giữ lại bản `.js` cũ. Thiếu điều đó, bộ kiểm thử
 sẽ âm thầm chạy trên mã nguồn lỗi thời và báo xanh sai.
 
-Rồi mở lần lượt `harness.html`, `window.test.html`, `popup.test.html`,
-`epub.test.html`, `pdf.test.html` dưới `http://localhost:8899/test/`. Mỗi trang tự lái giao diện
-và in ra số phép đạt/hỏng.
+### Vì sao phải có `run-browser.js`
+
+Các bộ `.html` dùng `setTimeout` thật để chờ hiệu ứng và storage lắng xuống.
+Chrome **bóp nhịp bộ đếm của tab không hiển thị**: xuống ~1 lần/giây, rồi
+**1 lần mỗi phút** sau 5 phút ẩn. Mở tab ngầm rồi ngồi đợi thì bộ 136 phép bò
+suốt hàng giờ và trông y như treo cứng — đã mất thời gian vì đúng chuyện này
+nhiều lần.
+
+`run-browser.js` bật Chrome headless kèm ba cờ `--disable-background-timer-throttling`,
+`--disable-backgrounding-occluded-windows`, `--disable-renderer-backgrounding`
+rồi lái bằng giao thức DevTools. Cùng bộ đó chạy xong trong **14 giây**.
+
+Vẫn mở tay được: `http://localhost:8899/test/harness.html` — nhưng **phải để tab
+hiển thị**, nếu không sẽ gặp đúng cảnh trên.
 
 `test/demo.html` mở sẵn trình đọc trên một bài mẫu để xem nhanh giao diện mà không
 cần cài extension.
-
-> Sửa code mà kết quả không đổi thì thêm `?cb=1` vào URL để bỏ qua cache.
->
-> **Để tab hiển thị trong lúc chạy.** Tab bị ẩn thì Chrome kẹp `setTimeout` về
-> ~1 giây, và sau 5 phút ẩn thì kẹp về **1 lần mỗi phút** — bộ kiểm thử trông
-> như treo cứng trong khi thật ra vẫn đang chạy.
 
 ## Muốn sửa gì thì sửa ở đâu
 
 | Muốn thay đổi | Sửa file |
 |---|---|
 | Thêm/đổi một tuỳ chọn cài đặt | `content/defaults.js` — chỉ sửa ở đây, 4 nơi còn lại tự lấy theo |
+| Sửa chữ hiển thị / thêm ngôn ngữ | `content/i18n.js` |
+| Cách đọc theo từng ngôn ngữ nội dung | `content/engine.js`, hằng `PROFILES` |
 | Thuật toán tách nội dung chính | `content/extractor.js`, hàm `scoreNode` |
 | Loại khối (tiêu đề/đoạn/danh sách) | `content/extractor.js`, hàm `blockType` |
 | Thời gian dừng ở dấu câu / từ ngắn | `content/engine.js`, hàm `tokenDelay` |
@@ -418,6 +477,35 @@ cần cài extension.
   thì phải **đo bề rộng chữ render ra**.
 - **`getDocument()` của pdf.js v6 chỉ nhận object**, không nhận chuỗi URL trần
   như bản cũ. Truyền chuỗi vào là nó ném lỗi và rơi vào catch chung.
+- **File nạp vào service worker KHÔNG được chạm `window`/`document`.** Service
+  worker không có hai thứ đó; một dòng `if (window.x) return;` trong file được
+  `importScripts` là đủ để Chrome từ chối với thông báo cụt lủn *"Service worker
+  registration failed. Status code: 15"* — không nói file nào, dòng nào. Dùng
+  `self` thay thế. `test/serviceworker.test.js` dựng đúng ngữ cảnh đó và quét
+  tĩnh mã nguồn để chặn lỗi này tái diễn.
+- **Đừng để `.DS_Store` lọt vào `_locales/`.** Chrome duyệt thư mục con của
+  `_locales` để tìm ngôn ngữ; file rác của Finder ở đó gây lỗi nạp locale. Xoá
+  bằng `find lamp-reader -name .DS_Store -delete` trước khi đóng gói.
+- **`chrome.contextMenus.create` không có bản "tạo-hoặc-cập-nhật".** Gọi hai lần
+  cùng một id là lỗi *"Cannot create item with duplicate id"*. Chrome áp dụng
+  `removeAll` ngay khi nhận lệnh nhưng trả callback sau, nên hai lượt dựng menu
+  chồng nhau sẽ cùng thấy menu trống rồi cùng tạo. Mọi lượt dựng menu phải xếp
+  hàng nối đuôi (`menuQueue` trong `background.js`).
+- **Callback của API Chrome phải ĐỌC `runtime.lastError`.** Không đọc thì Chrome
+  ghi *"Unchecked runtime.lastError"* lên trang lỗi của extension — người dùng mở
+  ra thấy báo đỏ dù mọi thứ vẫn chạy. `test/qa.test.js` quét chuyện này.
+- **Service worker MV3 bị tắt sau ~30 giây rảnh, mất sạch biến toàn cục.** Mã cửa
+  sổ đọc từng nằm trong một `let`, nên chỉ cần rảnh nửa phút là mở bài tiếp theo
+  lại đẻ thêm cửa sổ, và "nhớ kích thước cửa sổ" gần như không bao giờ chạy. Thứ
+  gì cần sống lâu hơn một lần thức dậy thì phải cất vào `chrome.storage.session`.
+- **Listener `async` phải tự bọc `try`.** Chrome không bắt giúp: một lời hứa bị từ
+  chối trong `chrome.commands.onCommand` sẽ nổi thẳng lên trang lỗi của extension.
+- **Đừng đặt tên hàm dịch là `t`.** `t` đã được dùng làm biến token ở rất nhiều
+  hàm trong `reader.js`; biến cục bộ sẽ che mất hàm dịch và gây `t is not a
+  function` lúc chạy. Trong mã dùng tên `tr`.
+- **Chuỗi đã dịch không được tính ở cấp module.** `const` cấp module chỉ chạy một
+  lần lúc nạp file, nên đổi ngôn ngữ xong nhãn vẫn giữ ngôn ngữ cũ. Giữ khoá
+  (`labelKey`) rồi dịch lúc dựng giao diện — xem `FONTS` và `THEME_LABEL()`.
 - **Overlay nằm trong Shadow DOM.** Listener bàn phím gắn ở `document` sẽ nhận
   `e.target` đã bị retarget về phần tử host (luôn là `DIV`), không bao giờ thấy
   `INPUT`. Muốn biết phần tử thật thì dùng `e.composedPath()[0]` — nếu không, gõ

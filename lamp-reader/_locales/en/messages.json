@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "Lamp — RSVP Speed Reader"
+  },
+  "appDesc": {
+    "message": "Speed-read any web page, PDF or EPUB with RSVP, in its own reading window. Press Alt+R to start."
+  },
+  "cmdToggle": {
+    "message": "Open the speed reader on the current page"
+  },
+  "actionTitle": {
+    "message": "Lamp — Speed read"
+  }
+}

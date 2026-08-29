@@ -5,6 +5,14 @@
 import { getDocument, GlobalWorkerOptions } from "../vendor/pdf.mjs";
 import { pagesToBlocks } from "../content/pdftext.js";
 
+const T = (k, v) => (self.__lampI18n ? self.__lampI18n.t(k, v) : k);
+// Ngôn ngữ giao diện phải đặt trước khi hiện bất kỳ thông báo nào
+chrome.storage.sync.get({ lang: "auto" }).then((o) => {
+  if (!self.__lampI18n) return;
+  self.__lampI18n.setLang(o.lang);
+  self.__lampI18n.apply();
+});
+
 GlobalWorkerOptions.workerSrc = chrome.runtime.getURL("vendor/pdf.worker.mjs");
 
 const statusEl = document.getElementById("status");
@@ -39,7 +47,7 @@ async function extractPdf(source) {
   const pdf = await getDocument(source).promise;
   const pages = [];
   for (let p = 1; p <= pdf.numPages; p++) {
-    setStatus(`Đang trích xuất trang ${p}/${pdf.numPages}…`);
+    setStatus(T("pdf.page", { i: p, n: pdf.numPages }));
     setProgress(p, pdf.numPages);
     const page = await pdf.getPage(p);
     const vp = page.getViewport({ scale: 1 });
@@ -60,8 +68,7 @@ async function startReading(blocks, title) {
   const chars = blocks.reduce((n, b) => n + b.text.replace(/\s/g, "").length, 0);
   if (chars < 40) {
     setStatus(
-      "Không tìm thấy lớp chữ trong PDF này — nhiều khả năng đây là bản quét ảnh, cần OCR để đọc được.",
-      true
+      T("pdf.noText"), true
     );
     return;
   }
@@ -80,26 +87,26 @@ async function openReaderWith(blocks, title, lang) {
   window.__lampReader.open(settings);
 
   const words = blocks.reduce((n, b) => n + b.text.split(/\s+/).filter(Boolean).length, 0);
-  setStatus(`Đang đọc ${words.toLocaleString("vi-VN")} từ. Nhấn Esc để quay lại.`);
+  setStatus(T("pdf.reading", { n: self.__lampI18n ? self.__lampI18n.num(words) : words }));
 }
 
 async function startReadingBlocks(blocks, title, lang) {
   if (!window.__lampReader) {
-    setStatus("Không nạp được trình đọc (content/reader.js).", true);
+    setStatus(T("pdf.noReader"), true);
     return;
   }
   await openReaderWith(blocks, title, lang);
 }
 
 async function handleEpub(file) {
-  setStatus("Đang mở EPUB…");
+  setStatus(T("pdf.openingEpub"));
   const buf = await file.arrayBuffer();
   const { title, lang, blocks, chapters } = await window.__lampEpub.parse(buf, (i, n) => {
-    setStatus(`Đang đọc chương ${i}/${n}…`);
+    setStatus(T("pdf.chapter", { i, n }));
     setProgress(i, n);
   });
   setProgress(0, 0);
-  setStatus(`Đã đọc ${chapters} chương.`);
+  setStatus(T("pdf.doneChapters", { n: chapters }));
   // EPUB đã cho sẵn khối có cấu trúc (tiêu đề/đoạn/danh sách) nên đưa thẳng
   // vào trình đọc, không phải đi qua bước tách đoạn thô như PDF.
   await startReadingBlocks(blocks, title || file.name, lang);
@@ -110,20 +117,20 @@ async function handleFile(file) {
   const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
   const isEpub = /\.epub$/i.test(file.name) || file.type === "application/epub+zip";
   if (!isPdf && !isEpub) {
-    setStatus("Chỉ đọc được file PDF hoặc EPUB.", true);
+    setStatus(T("pdf.wrongType"), true);
     return;
   }
   try {
     if (isEpub) { await handleEpub(file); return; }
-    setStatus("Đang mở file…");
+    setStatus(T("pdf.opening"));
     const buf = await file.arrayBuffer();
     const { blocks, numPages } = await extractPdf({ data: buf });
-    setStatus(`Đã trích xuất ${numPages} trang.`);
+    setStatus(T("pdf.donePages", { n: numPages }));
     setProgress(0, 0);
     await startReading(blocks, file.name);
   } catch (err) {
     setProgress(0, 0);
-    setStatus("Không đọc được file này: " + err.message, true);
+    setStatus(T("pdf.cantRead", { err: err.message }), true);
   }
 }
 
@@ -154,10 +161,10 @@ dropEl.addEventListener("drop", (e) => {
 // riêng. Thay vì báo lỗi cụt ngủn, hiện hẳn một nút để cấp quyền ngay tại chỗ —
 // bấm nút là một cử chỉ người dùng hợp lệ để gọi permissions.request().
 async function loadRemotePdf(target) {
-  setStatus("Đang tải PDF từ đường dẫn…");
+  setStatus(T("pdf.fromUrl"));
   try {
     const { blocks, numPages } = await extractPdf({ url: target });
-    setStatus(`Đã trích xuất ${numPages} trang.`);
+    setStatus(T("pdf.donePages", { n: numPages }));
     setProgress(0, 0);
     await startReading(blocks, decodeURIComponent(target.split("/").pop()));
     return true;
@@ -171,18 +178,18 @@ function askPermissionFor(target, onGranted) {
   let origin = null;
   try { origin = new URL(target).origin + "/*"; } catch (e) {}
   if (!origin || !chrome.permissions) {
-    setStatus("Không tải được PDF từ đường dẫn này. Hãy chọn file thủ công bên trên.", true);
+    setStatus(T("pdf.failUrl"), true);
     return;
   }
-  setStatus("Cần cấp quyền để tải PDF từ " + new URL(target).hostname + ".", true);
+  setStatus(T("pdf.needPerm", { host: new URL(target).hostname }), true);
   const btn = document.createElement("button");
   btn.className = "pdf";
-  btn.textContent = "Cấp quyền rồi thử lại";
+  btn.textContent = T("pdf.grant");
   btn.addEventListener("click", async () => {
     let granted = false;
     try { granted = await chrome.permissions.request({ origins: [origin] }); } catch (e) {}
     if (!granted) {
-      setStatus("Chưa được cấp quyền. Hãy chọn file thủ công bên trên.", true);
+      setStatus(T("pdf.denied"), true);
       return;
     }
     btn.remove();

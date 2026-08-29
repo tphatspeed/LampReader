@@ -33,7 +33,9 @@ const DOC = {
   ]
 };
 
-window.__state = { sync:{}, local:{}, session:{ "doc:TEST1": DOC }, closed:false };
+// Cố định ngôn ngữ để các phép so chuỗi bên dưới ổn định, không phụ thuộc
+// ngôn ngữ của trình duyệt đang chạy kiểm thử.
+window.__state = { sync:{ lang:"vi" }, local:{}, session:{ "doc:TEST1": DOC }, closed:false };
 
 fetch("../lamp-reader/reader/reader.html").then(r=>r.text()).then(html=>{
   const stub = `<script>

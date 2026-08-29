@@ -56,7 +56,7 @@ window.chrome = {
 // Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
 (function () {
   var v = Date.now();
-  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
+  ["../lamp-reader/content/defaults.js", "../lamp-reader/content/i18n.js", "../lamp-reader/content/extractor.js", "../lamp-reader/content/engine.js", "../lamp-reader/content/reader.js"].forEach(function (src) {
     document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
   });
 })();
@@ -87,7 +87,7 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   ok("khối thường là p", ex.blocks.some(b => b.type === "p"));
 
   head("mở trình đọc");
-  await window.__lampReader.open({});
+  await window.__lampReader.open({ lang: "vi" });
   await wait(120);
   ok("overlay được dựng", !!document.getElementById("lamp-reader-host"));
   ok("có token", $("#pos").textContent !== "0 / 0", $("#pos").textContent);
@@ -423,8 +423,11 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   head("phím H có trong danh sách phím tắt");
   {
     $("#settingsBtn").click(); await wait(80);
-    const keys = $(".keys").textContent;
-    ok("có nhắc phím H", /\bH\b/.test(keys) && /lưu câu/.test(keys), keys.replace(/\s+/g, " ").slice(0, 120));
+    // Kiểm tra trên innerHTML: textContent nối các dòng liền nhau ("dàn bàiH")
+    // nên ranh giới từ \b không dùng được ở đây.
+    const keys = $(".keys").innerHTML;
+    ok("có nhắc phím H", /<kbd>H<\/kbd>/.test(keys) && /lưu câu/.test(keys),
+       $(".keys").textContent.replace(/\s+/g, " ").slice(0, 120));
     $("#sheetClose").click(); await wait(60);
   }
 
@@ -491,6 +494,59 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
        $$("[data-font]").filter(b => b.classList.contains("font-missing")).length === 0);
   }
 
+  head("đa ngôn ngữ: đổi ngôn ngữ đổi cả giao diện");
+  {
+    // Đang chạy tiếng Việt (harness cố định như vậy)
+    $("#settingsBtn").click(); await wait(80);
+    ok("có bộ chọn ngôn ngữ", !!$("#langSel"));
+    const opts = Array.from($("#langSel").options).map(o => o.value);
+    ok("liệt kê đủ auto + các ngôn ngữ", opts.includes("auto") && opts.includes("vi") && opts.includes("en"),
+       opts.join(","));
+    ok("đang chọn đúng ngôn ngữ hiện tại", $("#langSel").value === "vi", $("#langSel").value);
+
+    const viHead = $("#sheet .sheet-head b").textContent;
+    ok("tiêu đề bảng đang là tiếng Việt", viHead === "Cài đặt", viHead);
+
+    // đổi sang tiếng Anh
+    $("#langSel").value = "en";
+    $("#langSel").dispatchEvent(new Event("change", { bubbles: true }));
+    await wait(500);
+
+    ok("overlay được dựng lại", !!$(".backdrop"));
+    $("#settingsBtn").click(); await wait(120);
+    const enHead = $("#sheet .sheet-head b").textContent;
+    ok("tiêu đề bảng đổi sang tiếng Anh", enHead === "Settings", enHead);
+    ok("bộ chọn nhớ lựa chọn mới", $("#langSel").value === "en", $("#langSel").value);
+    ok("nhãn nút dock cũng đổi", /Speed|Words|size/i.test($(".steppers").textContent),
+       $(".steppers").textContent.replace(/\s+/g," ").slice(0,60));
+    ok("lưu vào storage", store.sync.lang === "en", String(store.sync.lang));
+    $("#sheetClose").click(); await wait(60);
+
+    // dàn bài và quiz cũng phải theo ngôn ngữ mới
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "o", bubbles: true }));
+    await wait(100);
+    ok("dàn bài giữ nguyên số mục sau khi đổi ngôn ngữ", $$(".outline-row").length >= 2);
+    $("#outlineClose").click(); await wait(60);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "q", bubbles: true }));
+    await wait(250);
+    ok("quiz mở được sau khi đổi ngôn ngữ", $("#quiz").hidden === false);
+    ok("nhãn dạng câu hỏi đã sang tiếng Anh",
+       $$(".quiz-kind").every(e => !/Điền|Số liệu|Thứ tự/.test(e.textContent)),
+       $$(".quiz-kind").map(e=>e.textContent).join(","));
+    ok("nút chấm điểm sang tiếng Anh", /Check answers/.test($("#quizSubmit").textContent),
+       $("#quizSubmit").textContent);
+    $("#quizClose").click(); await wait(60);
+
+    // trả về tiếng Việt cho các phép kiểm thử sau
+    $("#settingsBtn").click(); await wait(80);
+    $("#langSel").value = "vi";
+    $("#langSel").dispatchEvent(new Event("change", { bubbles: true }));
+    await wait(500);
+    $("#settingsBtn").click(); await wait(80);
+    ok("đổi ngược lại tiếng Việt được", $("#sheet .sheet-head b").textContent === "Cài đặt");
+    $("#sheetClose").click(); await wait(60);
+  }
+
   head("trợ năng: overlay là hộp thoại");
   const hostEl = document.getElementById("lamp-reader-host");
   ok("có role=dialog", hostEl.getAttribute("role") === "dialog");
@@ -505,7 +561,7 @@ const $$ = (s) => Array.from(R().querySelectorAll(s));
   await wait(80);
   const w1 = (store.local.stats && store.local.stats.days) ?
     Object.values(store.local.stats.days).reduce((n, d) => n + d.words, 0) : 0;
-  await window.__lampReader.open({});
+  await window.__lampReader.open({ lang: "vi" });
   await wait(120);
   window.__lampReader.close();
   await wait(80);

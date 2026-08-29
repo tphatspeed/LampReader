@@ -12,6 +12,8 @@
 
 (() => {
   const DEFAULTS = {
+    // "auto" = theo ngôn ngữ trình duyệt. Xem content/i18n.js.
+    lang: "auto",
     mode: "rsvp",
     wpm: 350,
     chunkSize: 1,

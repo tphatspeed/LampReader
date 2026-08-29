@@ -25,8 +25,10 @@ Chạy hoàn toàn trên máy bạn. Không tài khoản, không máy chủ, kh�
   chỉ ra mức nhanh nhất mà bạn vẫn hiểu ≥80%.
 - **Trích đoạn** — bấm `H` lưu câu đang đọc, xuất ra Markdown.
 - **Thư viện đọc dở** — bài nào chưa đọc xong nằm sẵn trong popup, bấm là đọc tiếp.
-- **Tiếng Việt được xử lý riêng** — tự nhận diện rồi giảm nhịp 15%, quiz khoét cả
-  cụm hai âm tiết, phông nhúng sẵn hiển thị đúng dấu chồng (ế, ộ, ữ).
+- **Giao diện Việt / Anh**, đổi ngay trong cài đặt, không phụ thuộc ngôn ngữ trình duyệt.
+- **Nhận ra ngôn ngữ của bài** rồi chỉnh nhịp đọc, cách ra đề và giọng đọc theo —
+  tiếng Việt giảm nhịp 15% và khoét cụm hai âm tiết; tiếng Trung/Nhật tách từ bằng
+  `Intl.Segmenter` vì viết liền không có dấu cách.
 - **Không xin quyền khi cài** — chỉ dùng `activeTab`; quyền rộng hơn chỉ hỏi khi
   bạn thật sự cần, và thu hồi được bất cứ lúc nào.
 
@@ -56,12 +58,14 @@ test/            Bộ kiểm thử (không nằm trong extension)
 
 ## Kiểm thử
 
-226 phép kiểm thử, chạy trên chính mã nguồn thật:
+460 phép kiểm thử, chạy trên chính mã nguồn thật. Một lệnh, khoảng 25 giây:
 
 ```bash
-node test/engine.test.js          # 53 phép — logic thuần, không cần trình duyệt
-python3 test/serve.py             # rồi mở các trang test/ trong trình duyệt
+bash test/run-all.sh
 ```
+
+Bốn bộ chạy bằng node (logic thuần, ngữ cảnh service worker, toàn vẹn gói), năm
+bộ còn lại chạy trong Chrome headless để kiểm giao diện thật.
 
 Chi tiết ở [phần Kiểm thử](lamp-reader/README.md#chạy-kiểm-thử) của tài liệu chính.
 

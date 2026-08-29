@@ -11,7 +11,7 @@
 // Đã mất thời gian vài lần vì bộ kiểm thử âm thầm chạy trên .js lỗi thời.
 (function () {
   var v = Date.now();
-  ["../lamp-reader/content/epub.js", "../lamp-reader/content/engine.js"].forEach(function (src) {
+  ["../lamp-reader/content/i18n.js", "../lamp-reader/content/epub.js", "../lamp-reader/content/engine.js"].forEach(function (src) {
     document.write('<scr' + 'ipt src="' + src + '?v=' + v + '"><\/scr' + 'ipt>');
   });
 })();
@@ -24,6 +24,10 @@ function ok(n,c,e){if(c){pass++;log.innerHTML+=`<span class="ok">  ok   ${n}</sp
 function note(t){log.innerHTML+=`<span style="color:#888">       ${t}</span>\n`}
 
 (async function run(){
+  // Thông báo lỗi của epub.js đi qua i18n — cố định ngôn ngữ để so chuỗi ổn định
+  self.__lampI18n.setLang("vi");
+  ok("i18n nạp được", !!self.__lampI18n);
+
   head("đọc file EPUB thật (ZIP + deflate, tự giải nén)");
   ok("trình duyệt có DecompressionStream deflate-raw", typeof DecompressionStream === "function");
 

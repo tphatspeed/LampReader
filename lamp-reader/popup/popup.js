@@ -1,6 +1,8 @@
 // Lamp — popup.js
 
 const DEFAULTS = window.LAMP_DEFAULTS; // xem content/defaults.js
+const I = window.__lampI18n;
+const t = (k, v) => I.t(k, v);
 
 const STEP = { wpm: 50, chunk: 1, size: 4 };
 const LIMIT = { wpm: [100, 1200], chunk: [1, 6], size: [24, 120] };
@@ -10,6 +12,37 @@ const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 
 let settings = { ...DEFAULTS };
 
+// Ghi cài đặt phải GOM NHỊP. chrome.storage.sync giới hạn 120 lượt ghi mỗi
+// phút; bấm +/- liên tục là chạm trần, và khi chạm thì Chrome lặng lẽ bỏ qua
+// lượt ghi chứ không báo gì — người dùng chỉnh xong, mở lại thấy mất. reader.js
+// đã gom nhịp từ v1.6, popup thì bị bỏ sót.
+//
+// Kèm theo BẮT BUỘC phải xả nốt lúc đóng: popup đóng gần như tức thì sau cú
+// bấm cuối, nên gom nhịp mà không xả thì còn tệ hơn không gom — mất luôn thay
+// đổi cuối cùng.
+const quiet = (p) => Promise.resolve(p).catch(() => {});
+let saveTimer = null, saveDirty = false;
+
+function flushSettings() {
+  if (!saveDirty) return;
+  saveDirty = false;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  quiet(chrome.storage.sync.set(settings));
+}
+
+function saveSettings() {
+  saveDirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSettings, 300);
+}
+
+// pagehide đáng tin hơn unload trên Chrome, và popup luôn đi qua nó khi tắt.
+window.addEventListener("pagehide", flushSettings);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushSettings();
+});
+
 function paint() {
   $("wpmVal").textContent = settings.wpm;
   $("chunkVal").textContent = settings.chunkSize;
@@ -18,6 +51,9 @@ function paint() {
 
 async function init() {
   settings = await chrome.storage.sync.get(DEFAULTS);
+  // Đặt ngôn ngữ rồi điền chữ vào HTML tĩnh trước khi hiện gì khác
+  I.setLang(settings.lang);
+  I.apply();
   paint();
 
   document.querySelectorAll("[data-step]").forEach((btn) => {
@@ -28,7 +64,7 @@ async function init() {
       if (key === "chunk") settings.chunkSize = clamp(settings.chunkSize + d * STEP.chunk, LIMIT.chunk);
       if (key === "size") settings.fontSize = clamp(settings.fontSize + d * STEP.size, LIMIT.size);
       paint();
-      chrome.storage.sync.set(settings);
+      saveSettings();
     });
   });
 
@@ -51,11 +87,11 @@ async function init() {
       window.close();
     } else {
       const LOI = {
-        "internal-page": "Không chạy được trên trang nội bộ của Chrome.",
-        "empty-page": "Không tìm thấy nội dung đủ dài trên trang này.",
-        "empty-selection": "Chưa bôi đen đoạn nào, hoặc đoạn quá ngắn."
+        "internal-page": "pop.err.internal",
+        "empty-page": "pop.err.empty",
+        "empty-selection": "pop.err.selection"
       };
-      $("err").textContent = (res && LOI[res.reason]) || "Không mở được trình đọc trên trang này.";
+      $("err").textContent = t((res && LOI[res.reason]) || "pop.err.other");
     }
   });
 }
@@ -74,15 +110,15 @@ const esc = (s) => String(s)
 
 function timeAgo(ts) {
   const m = Math.floor((Date.now() - ts) / 60000);
-  if (m < 1) return "vừa xong";
-  if (m < 60) return m + " phút trước";
+  if (m < 1) return t("time.now");
+  if (m < 60) return t("time.min", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return h + " giờ trước";
+  if (h < 24) return t("time.hour", { n: h });
   const d = Math.floor(h / 24);
-  return d < 30 ? d + " ngày trước" : Math.floor(d / 30) + " tháng trước";
+  return d < 30 ? t("time.day", { n: d }) : t("time.month", { n: Math.floor(d / 30) });
 }
 
-const KIND_LABEL = { "pdf-url": "PDF", "pdf-local": "PDF trên máy" };
+const KIND_LABEL = () => ({ "pdf-url": t("pop.kind.pdfUrl"), "pdf-local": t("pop.kind.pdfLocal") });
 
 async function readLibrary() {
   let all = {};
@@ -102,7 +138,7 @@ async function paintLibrary() {
   $("libClear").hidden = items.length === 0;
 
   if (!items.length) {
-    box.innerHTML = '<div class="lib-empty">Chưa có bài nào đang đọc dở. Đọc được một đoạn rồi đóng lại, bài sẽ hiện ở đây.</div>';
+    box.innerHTML = '<div class="lib-empty">' + esc(t("pop.libEmpty")) + '</div>';
     return;
   }
 
@@ -110,10 +146,10 @@ async function paintLibrary() {
     <div class="lib-item" data-key="${esc(it.key)}" data-url="${esc(it.url || "")}" data-kind="${esc(it.kind || "web")}" role="button" tabindex="0">
       <span class="lib-main">
         <span class="lib-title">${esc(it.title)}</span>
-        <span class="lib-meta">${KIND_LABEL[it.kind] ? KIND_LABEL[it.kind] + " · " : ""}${timeAgo(it.at || Date.now())}</span>
+        <span class="lib-meta">${KIND_LABEL()[it.kind] ? esc(KIND_LABEL()[it.kind]) + " · " : ""}${timeAgo(it.at || Date.now())}</span>
       </span>
       <span class="lib-ring">${it.pct || 0}%</span>
-      <button class="lib-del" title="Xoá khỏi danh sách" aria-label="Xoá khỏi danh sách">×</button>
+      <button class="lib-del" title="${esc(t("btn.delete"))}" aria-label="${esc(t("btn.delete"))}">×</button>
     </div>`).join("");
 
   box.querySelectorAll(".lib-item").forEach((el) => {
@@ -168,10 +204,8 @@ async function paintPerm() {
   let has = false;
   try { has = await chrome.permissions.contains(ALL_URLS); } catch (e) {}
   $("perm").classList.toggle("on", has);
-  $("permDesc").textContent = has
-    ? "Đã cấp. Bấm một bài ở trên là mở ra và đọc tiếp ngay."
-    : "Cần cấp quyền để mở lại bài từ danh sách trên.";
-  $("permBtn").textContent = has ? "Thu hồi" : "Cấp quyền";
+  $("permDesc").textContent = t(has ? "pop.permHas" : "pop.permNeed");
+  $("permBtn").textContent = t(has ? "pop.permRevoke" : "pop.permGrant");
 }
 
 function wirePerm() {

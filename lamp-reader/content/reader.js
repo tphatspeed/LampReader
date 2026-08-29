@@ -7,6 +7,17 @@
   window.__lampReaderLoaded = true;
 
   const E = window.__lampEngine;
+  const I = window.__lampI18n;
+  // Đặt tên `tr` chứ không phải `t`: `t` đã được dùng làm biến token ở rất
+  // nhiều hàm, biến cục bộ sẽ che mất hàm dịch và gây lỗi lúc chạy.
+  const tr = (k, v) => I.t(k, v);
+  // Ký hiệu phím dùng chung cho các dòng gợi ý phím tắt
+  const K = {
+    space: "<kbd>Space</kbd>", left: "<kbd>←</kbd>", right: "<kbd>→</kbd>",
+    up: "<kbd>↑</kbd>", down: "<kbd>↓</kbd>", shift: "<kbd>Shift</kbd>",
+    m: "<kbd>M</kbd>", o: "<kbd>O</kbd>", h: "<kbd>H</kbd>",
+    q: "<kbd>Q</kbd>", s: "<kbd>S</kbd>", r: "<kbd>R</kbd>"
+  };
 
   const DEFAULTS = window.LAMP_DEFAULTS; // xem content/defaults.js
 
@@ -16,13 +27,16 @@
   // Các ngăn xếp phông đều chọn theo tiêu chí hiển thị đủ dấu tiếng Việt,
   // kể cả dấu chồng như ế, ộ, ữ. Xem README nếu muốn thả thêm file font.
   const FONTS = {
-    system: { label: "Hệ thống", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' },
+    // labelKey thay vì label sẵn: FONTS là const cấp module, tính MỘT LẦN lúc
+    // nạp file. Nhét chuỗi đã dịch vào đây thì đổi ngôn ngữ xong nhãn vẫn giữ
+    // ngôn ngữ cũ. Tên thương hiệu (Tahoma, Literata…) thì không cần dịch.
+    system: { labelKey: "font.system", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif' },
     vietnam: { label: "Be Vietnam", stack: '"Lamp Vietnam", "Be Vietnam Pro", "Be Vietnam", system-ui, sans-serif' },
     tahoma: { label: "Tahoma", stack: 'Tahoma, Verdana, Geneva, sans-serif' },
     serif: { label: "Serif", stack: '"Lamp Serif", Literata, Cambria, Charter, "Times New Roman", Times, serif' },
     notoserif: { label: "Noto Serif", stack: '"Lamp Noto Serif", "Noto Serif", Georgia, serif' },
     mono: { label: "Mono", stack: 'Consolas, "SF Mono", "Roboto Mono", "Courier New", monospace' },
-    custom: { label: "Tuỳ chỉnh", stack: "" }
+    custom: { labelKey: "font.custom", stack: "" }
   };
 
   // "auto" không phải một bảng màu riêng — nó bám theo cài đặt sáng/tối của
@@ -33,10 +47,10 @@
   const PANELS = ["#sheet", "#outline", "#quiz", "#highlights", "#train"];
 
   const THEMES = ["auto", "paper", "sepia", "gray", "night", "contrast"];
-  const THEME_LABEL = {
-    auto: "Theo hệ thống", paper: "Giấy", sepia: "Sepia",
-    gray: "Xám", night: "Đêm", contrast: "Tương phản cao"
-  };
+  const THEME_LABEL = () => ({
+    auto: tr("theme.auto"), paper: tr("theme.paper"), sepia: tr("theme.sepia"),
+    gray: tr("theme.gray"), night: tr("theme.night"), contrast: tr("theme.contrast")
+  });
   const darkQuery = () =>
     (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)")) || null;
   function resolveTheme(t) {
@@ -56,6 +70,7 @@
     playing: false,
     started: false,
     vietnamese: false,
+    docLang: "en",   // ngôn ngữ NỘI DUNG, khác ngôn ngữ giao diện
     timer: null,
     host: null,
     root: null,
@@ -128,13 +143,14 @@
     rhythm: state.rhythm,
     warmup: state.warmup,
     vietnamese: state.vietnamese,
+    lang: state.docLang,
     shortWords: state.shortWords
   });
 
   // Tốc độ thật sau khi trừ phần giảm nhịp cho tiếng Việt — dùng cho ước
   // lượng thời gian còn lại và cho tốc độ giọng đọc, để hai thứ này khớp với
   // nhịp chữ đang chạy thay vì lệch 15%.
-  const effectiveWpm = () => state.wpm * (state.vietnamese ? 0.85 : 1);
+  const effectiveWpm = () => state.wpm * E.profile(state.docLang).pace;
 
   // ============================ GIAO DIỆN ============================
 
@@ -142,18 +158,23 @@
     // Xem trước ngay trên nút: mỗi nút tự hiển thị bằng đúng phông nó đại
     // diện, nên không cần mở panel ra xa mới biết phông đã đổi hay chưa.
     const fontBtns = Object.entries(FONTS)
-      .map(([k, v]) => `<button class="seg" data-font="${k}"${v.stack ? ` style="font-family:${v.stack.replace(/"/g, "&quot;")}"` : ""}>${v.label}</button>`).join("");
+      .map(([k, v]) => {
+        const label = v.labelKey ? tr(v.labelKey) : v.label;
+        const style = v.stack ? ` style="font-family:${v.stack.replace(/"/g, "&quot;")}"` : "";
+        return `<button class="seg" data-font="${k}"${style}>${esc(label)}</button>`;
+      }).join("");
     const themeBtns = THEMES.map(
-      (t) => `<button class="swatch" data-theme="${t}" title="${THEME_LABEL[t]}" aria-label="${THEME_LABEL[t]}"><i></i></button>`
+      (x) => { const L = THEME_LABEL()[x];
+        return `<button class="swatch" data-theme="${x}" title="${esc(L)}" aria-label="${esc(L)}"><i></i></button>`; }
     ).join("");
 
     const stepper = (id, label, unit = "") => `
       <div class="stepper">
         <span class="stepper-label">${label}</span>
         <div class="stepper-box">
-          <button class="step" data-step="${id}:-1" aria-label="Giảm ${label}">−</button>
+          <button class="step" data-step="${id}:-1" aria-label="${esc(tr("a11y.dec", { label }))}">−</button>
           <span class="stepper-val"><b id="${id}Val">0</b>${unit ? `<em>${unit}</em>` : ""}</span>
-          <button class="step" data-step="${id}:1" aria-label="Tăng ${label}">+</button>
+          <button class="step" data-step="${id}:1" aria-label="${esc(tr("a11y.inc", { label }))}">+</button>
         </div>
       </div>`;
 
@@ -178,10 +199,10 @@
 
         <div class="topbar">
           <div class="doc-title" id="docTitle"></div>
-          <button class="round" id="hlBtn" title="Trích đoạn đã lưu (phím H để lưu câu đang đọc)" aria-label="Trích đoạn đã lưu">${icon.mark}<i class="badge" id="hlCount" hidden></i></button>
-          <button class="round" id="outlineBtn" title="Dàn bài (O)" aria-label="Dàn bài">${icon.list}</button>
-          <button class="round" id="settingsBtn" title="Cài đặt (S)" aria-label="Cài đặt">${icon.gear}</button>
-          <button class="round" id="closeBtn" title="Đóng (Esc)" aria-label="Đóng">${icon.x}</button>
+          <button class="round" id="hlBtn" title="${esc(tr("top.marks.tip"))}" aria-label="${esc(tr("top.marks"))}">${icon.mark}<i class="badge" id="hlCount" hidden></i></button>
+          <button class="round" id="outlineBtn" title="${esc(tr("top.outline.tip"))}" aria-label="${esc(tr("top.outline"))}">${icon.list}</button>
+          <button class="round" id="settingsBtn" title="${esc(tr("top.settings.tip"))}" aria-label="${esc(tr("top.settings"))}">${icon.gear}</button>
+          <button class="round" id="closeBtn" title="${esc(tr("btn.close.tip"))}" aria-label="${esc(tr("btn.close"))}">${icon.x}</button>
         </div>
 
         <div class="stage" id="stage">
@@ -196,126 +217,131 @@
           <div class="guide-view" id="guideView" hidden></div>
           <div class="focus-view" id="focusView" hidden></div>
           <div class="flash" id="flash" hidden></div>
-          <div class="ready" id="ready">Nhấn <kbd>Space</kbd> để bắt đầu</div>
+          <div class="ready" id="ready">${tr("ready", { key: "<kbd>Space</kbd>" })}</div>
         </div>
 
         <div class="dock">
           <div class="modebar" id="modebar">
-            <button class="seg" data-mode="rsvp">RSVP</button>
-            <button class="seg" data-mode="guide">Dẫn dòng</button>
+            <button class="seg" data-mode="rsvp">${esc(tr("mode.rsvp"))}</button>
+            <button class="seg" data-mode="guide">${esc(tr("mode.guide"))}</button>
           </div>
 
-          <div class="track" id="track" role="slider" tabindex="0" aria-label="Tiến độ đọc">
+          <div class="track" id="track" role="slider" tabindex="0" aria-label="${esc(tr("dock.progress"))}">
             <div class="fill" id="fill"></div>
             <div class="knob" id="knob"></div>
           </div>
           <div class="meta">
             <span id="pos">0 / 0</span>
-            <span id="left">còn 0:00</span>
+            <span id="left">${esc(tr("dock.leftZero"))}</span>
           </div>
 
           <div class="transport">
-            <button class="tbtn" id="back" title="Lùi 10 (←) · Shift+← đọc lại câu">${icon.prev}</button>
-            <button class="playbtn" id="play" title="Phát / dừng (Space)" aria-label="Phát hoặc dừng">
+            <button class="tbtn" id="back" title="${esc(tr("dock.back"))}">${icon.prev}</button>
+            <button class="playbtn" id="play" title="${esc(tr("dock.play"))}" aria-label="${esc(tr("dock.play.a11y"))}">
               <svg id="playIcon" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
             </button>
-            <button class="tbtn" id="fwd" title="Tiến 10 (→) · Shift+→ câu sau">${icon.next}</button>
+            <button class="tbtn" id="fwd" title="${esc(tr("dock.fwd"))}">${icon.next}</button>
           </div>
 
           <div class="steppers">
-            ${stepper("wpm", "Tốc độ", "WPM")}
+            ${stepper("wpm", tr("dock.speed"), "WPM")}
             <div class="zone-slot"><span class="zone" id="zone"></span></div>
-            ${stepper("chunk", "Từ mỗi lần")}
-            ${stepper("size", "Cỡ chữ", "px")}
+            ${stepper("chunk", tr("dock.chunk"))}
+            ${stepper("size", tr("dock.size"), "px")}
           </div>
         </div>
 
         <!-- Dàn bài -->
         <div class="sheet" id="outline" hidden>
-          <div class="sheet-head"><b>Dàn bài</b>
-            <button class="round sm" id="outlineClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-head"><b>${esc(tr("top.outline"))}</b>
+            <button class="round sm" id="outlineClose" aria-label="${esc(tr("btn.close"))}">${icon.x}</button></div>
           <div class="sheet-body"><div id="outlineList" class="outline-list"></div></div>
         </div>
 
         <!-- Cài đặt -->
         <div class="sheet" id="sheet" hidden>
-          <div class="sheet-head"><b>Cài đặt</b>
-            <button class="round sm" id="sheetClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-head"><b>${esc(tr("top.settings"))}</b>
+            <button class="round sm" id="sheetClose" aria-label="${esc(tr("btn.close"))}">${icon.x}</button></div>
           <div class="sheet-body">
             <div class="group">
-              <div class="group-label">Phông chữ</div>
-              <div class="segbar" id="fonts">${fontBtns}</div>
-              <input type="text" id="customFont" class="text-input" placeholder="Tên phông đã cài trên máy, ví dụ: Literata" hidden>
+              <div class="group-label">${esc(tr("set.lang"))}</div>
+              <select id="langSel" class="text-input" style="margin-top:0">
+                ${[["auto", tr("set.lang.auto")]].concat(I.langs().map((c) => [c, I.name(c)]))
+                  .map(([c, nm]) => `<option value="${esc(c)}">${esc(nm)}</option>`).join("")}
+              </select>
             </div>
             <div class="group">
-              <div class="group-label">Giao diện</div>
+              <div class="group-label">${esc(tr("set.font"))}</div>
+              <div class="segbar" id="fonts">${fontBtns}</div>
+              <input type="text" id="customFont" class="text-input" placeholder="${esc(tr("set.customFont"))}" hidden>
+            </div>
+            <div class="group">
+              <div class="group-label">${esc(tr("set.theme"))}</div>
               <div class="swatches" id="themes">${themeBtns}</div>
             </div>
             <div class="group">
-              <div class="group-label">Giãn chữ</div>
-              <div class="steppers compact">${stepper("spacing", "Khoảng cách", "px")}</div>
+              <div class="group-label">${esc(tr("set.spacing"))}</div>
+              <div class="steppers compact">${stepper("spacing", tr("set.spacing.label"), "px")}</div>
             </div>
             <div class="group">
-              <div class="group-label">Đọc bằng giọng nói</div>
-              ${toggle("tts", "Bật giọng đọc", "Chữ chạy theo giọng, nghe và nhìn cùng lúc")}
+              <div class="group-label">${esc(tr("set.tts"))}</div>
+              ${toggle("tts", tr("set.tts.on"), tr("set.tts.desc"))}
               <select id="voice" class="text-input" hidden></select>
             </div>
             <div class="group">
-              ${toggle("orp", "Tô chữ trung tâm", "Điểm neo mắt, giúp nhận diện từ nhanh hơn")}
-              ${toggle("ruler", "Thanh dẫn", "Hai vạch canh vị trí mắt")}
-              ${toggle("rhythm", "Nhịp dấu câu", "Dừng lâu hơn ở cuối câu, câu dài dừng lâu hơn")}
-              ${toggle("shortWords", "Bỏ qua từ ngắn", "Từ đệm như “và”, “của”, “là” lướt nhanh hơn")}
-              ${toggle("context", "Xem ngữ cảnh", "Hiện các từ xung quanh, mờ hơn")}
-              ${toggle("warmup", "Khởi động chậm", "40 cụm đầu chạy ở 65% tốc độ rồi tăng dần")}
-              ${toggle("restReminder", "Nhắc nghỉ mắt", "Cứ 20 phút nhắc nhìn xa 20 giây")}
-              ${toggle("windowMode", "Mở ở cửa sổ riêng", "Tắt đi thì Lamp phủ lên chính trang web đang xem. Áp dụng từ lần mở sau.")}
+              ${toggle("orp", tr("set.orp"), tr("set.orp.desc"))}
+              ${toggle("ruler", tr("set.ruler"), tr("set.ruler.desc"))}
+              ${toggle("rhythm", tr("set.rhythm"), tr("set.rhythm.desc"))}
+              ${toggle("shortWords", tr("set.shortWords"), tr("set.shortWords.desc"))}
+              ${toggle("context", tr("set.context"), tr("set.context.desc"))}
+              ${toggle("warmup", tr("set.warmup"), tr("set.warmup.desc"))}
+              ${toggle("restReminder", tr("set.rest"), tr("set.rest.desc"))}
+              ${toggle("windowMode", tr("set.window"), tr("set.window.desc"))}
             </div>
             <div class="group">
-              <div class="group-label">Luyện tốc độ</div>
-              <button class="primary" id="trainOpen" style="margin-top:0">Bắt đầu buổi luyện</button>
-              <small class="hint">Đọc bài này ở 3 mức tốc độ tăng dần, mỗi mức kiểm tra hiểu ngay. Kết thúc sẽ chỉ ra mức WPM phù hợp nhất với bạn.</small>
+              <div class="group-label">${esc(tr("train.title"))}</div>
+              <button class="primary" id="trainOpen" style="margin-top:0">${esc(tr("train.start"))}</button>
+              <small class="hint">${esc(tr("train.desc"))}</small>
             </div>
             <div class="group">
-              <div class="group-label">Thống kê</div>
+              <div class="group-label">${esc(tr("set.stats"))}</div>
               <div id="stats" class="stats"></div>
             </div>
             <div class="keys">
-              <b>Phím tắt</b>
-              <div><kbd>Space</kbd> phát/dừng · <kbd>←</kbd><kbd>→</kbd> lùi/tiến 10 · <kbd>Shift</kbd>+<kbd>←</kbd> đọc lại câu</div>
-              <div><kbd>↑</kbd><kbd>↓</kbd> tốc độ · <kbd>M</kbd> đổi chế độ · <kbd>O</kbd> dàn bài</div>
-              <div><kbd>H</kbd> lưu câu đang đọc · <kbd>Q</kbd> kiểm tra hiểu · <kbd>S</kbd> cài đặt · <kbd>R</kbd> đọc lại từ đầu</div>
+              <b>${esc(tr("set.keys"))}</b>
+              ${["keys.line1", "keys.line2", "keys.line3"].map((k) => `<div>${tr(k, K)}</div>`).join("")}
             </div>
           </div>
         </div>
 
         <!-- Trích đoạn đã lưu -->
         <div class="sheet" id="highlights" hidden>
-          <div class="sheet-head"><b>Trích đoạn đã lưu</b>
-            <button class="round sm" id="hlClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-head"><b>${esc(tr("hl.title"))}</b>
+            <button class="round sm" id="hlClose" aria-label="${esc(tr("btn.close"))}">${icon.x}</button></div>
           <div class="sheet-body"><div id="hlBody"></div></div>
         </div>
 
         <!-- Luyện tốc độ -->
         <div class="sheet wide" id="train" hidden>
-          <div class="sheet-head"><b>Luyện tốc độ</b>
-            <button class="round sm" id="trainClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-head"><b>${esc(tr("train.title"))}</b>
+            <button class="round sm" id="trainClose" aria-label="${esc(tr("btn.close"))}">${icon.x}</button></div>
           <div class="sheet-body"><div id="trainBody"></div></div>
         </div>
 
         <!-- Kiểm tra hiểu -->
         <div class="sheet wide" id="quiz" hidden>
-          <div class="sheet-head"><b>Kiểm tra hiểu</b>
-            <button class="round sm" id="quizClose" aria-label="Đóng">${icon.x}</button></div>
+          <div class="sheet-head"><b>${esc(tr("quiz.title"))}</b>
+            <button class="round sm" id="quizClose" aria-label="${esc(tr("btn.close"))}">${icon.x}</button></div>
           <div class="sheet-body"><div id="quizBody"></div></div>
         </div>
 
         <!-- Nhắc nghỉ mắt -->
         <div class="rest" id="rest" hidden>
           <div class="rest-card">
-            <b>Nghỉ mắt 20 giây</b>
-            <p>Nhìn ra xa khoảng 6 mét. RSVP làm bạn chớp mắt ít hơn bình thường, đây là lúc bù lại.</p>
+            <b>${esc(tr("rest.title"))}</b>
+            <p>${esc(tr("rest.desc"))}</p>
             <div class="rest-count" id="restCount">20</div>
-            <button class="ghost" id="restSkip">Bỏ qua</button>
+            <button class="ghost" id="restSkip">${esc(tr("btn.skip"))}</button>
           </div>
         </div>
       </div>`;
@@ -330,7 +356,7 @@
     // gì che. aria-modal cắt hẳn phần đó ra khỏi cây trợ năng.
     host.setAttribute("role", "dialog");
     host.setAttribute("aria-modal", "true");
-    host.setAttribute("aria-label", "Lamp — trình đọc nhanh");
+    host.setAttribute("aria-label", tr("app.name"));
     const root = host.attachShadow({ mode: "open" });
 
     let css = "";
@@ -387,11 +413,41 @@
       const btn = $(`[data-font="${key}"]`);
       if (btn) {
         btn.classList.add("font-missing");
-        btn.title = "Không nạp được file phông này — xem fonts/README.txt";
+        btn.title = tr("set.fontMissing");
       }
     });
     // Phông về muộn hơn lần vẽ đầu: vẽ lại để chữ đổi sang phông đúng
     if (state.open) render();
+  }
+
+  // Đổi ngôn ngữ thì phải dựng lại overlay: markup() nhúng thẳng chuỗi đã
+  // dịch vào HTML một lần khi tạo, không có ràng buộc động nào để tự cập nhật.
+  // Dựng lại là cách gọn và chắc chắn nhất, đổi lại phải khôi phục trạng thái.
+  async function applyLang() {
+    I.setLang(state.lang);
+    if (!state.host) return;
+    const wasOpen = state.open;
+    const idx = state.idx;
+
+    state.host.remove();
+    state.host = null;
+    state.root = null;
+    await buildOverlay();
+
+    state.host.style.display = wasOpen ? "block" : "none";
+    state.idx = idx;
+    clearPaintCache();
+    if (state.mode === "guide") paintGuide();
+    applyStyle();
+    syncControls();
+    setPlayIcon(state.playing);
+    renderOutline();
+    paintHlCount();
+    render();
+    if ("speechSynthesis" in window) loadVoices();
+    // Dựng lại overlay là thay cả cây DOM — focus bay mất, và Tab tiếp theo sẽ
+    // rơi xuống trang phía sau. Trả focus về đúng chỗ như lúc mới mở.
+    if (wasOpen) $(".backdrop").focus({ preventScroll: true });
   }
 
   // ============================ SỰ KIỆN ============================
@@ -483,6 +539,12 @@
         applyStyle(); render(); save();
       })
     );
+
+    $("#langSel").addEventListener("change", (e) => {
+      state.lang = e.target.value;
+      save();
+      applyLang();
+    });
 
     $("#voice").addEventListener("change", (e) => {
       state.voiceURI = e.target.value;
@@ -633,7 +695,7 @@
       // — đổi số từ mỗi lần không được làm nhảy chỗ đang đọc.
       const at = state.tokens[state.idx];
       state.chunkSize = clampRange(state.chunkSize + dir * STEP.chunk, LIMIT.chunk);
-      state.tokens = E.buildTokens(state.blocks, state.chunkSize);
+      state.tokens = E.buildTokens(state.blocks, state.chunkSize, state.docLang);
       const found = at
         ? state.tokens.findIndex((t) => t.block === at.block && at.from >= t.from && at.from <= t.to)
         : -1;
@@ -669,7 +731,9 @@
   function paintBlocksInto(container) {
     const html = state.blocks
       .map((b, bi) => {
-        const words = b.text.split(/\s+/).filter(Boolean);
+        // Phải tách y hệt engine.buildTokens, nếu không chỉ số từ lệch và
+        // phần tô sáng nhảy sai chỗ (rõ nhất với tiếng Trung/Nhật).
+        const words = E.splitWords(b.text, state.docLang);
         const inner = words
           .map((w, wi) => {
             const { lead, core, trail } = splitWord(w);
@@ -783,8 +847,11 @@
     $("#sizeVal").textContent = state.fontSize;
     $("#spacingVal").textContent = state.spacing;
     $("#customFont").value = state.customFont || "";
+    const ls = $("#langSel");
+    if (ls) ls.value = state.lang || "auto";
     $$("[data-font]").forEach((b) => b.classList.toggle("on", b.dataset.font === state.fontFamily));
-    $$("[data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === state.theme));
+    // Giới hạn trong bảng chọn: chính .backdrop cũng mang data-theme
+    $$(".swatches [data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === state.theme));
     $$("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === state.mode));
     ["orp", "ruler", "rhythm", "shortWords", "context", "warmup", "restReminder", "tts", "windowMode"].forEach(
       (k) => ($("#" + k).checked = state[k])
@@ -829,19 +896,19 @@
     track.setAttribute("aria-valuemin", "1");
     track.setAttribute("aria-valuemax", String(Math.max(1, total)));
     track.setAttribute("aria-valuenow", String(state.idx + 1));
-    track.setAttribute("aria-valuetext", `${Math.round(pct)}% — ${state.idx + 1} trên ${total}`);
+    track.setAttribute("aria-valuetext", `${Math.round(pct)}% — ${state.idx + 1}/${total}`);
 
     // Nhịp thực tế đã tính cả giảm tốc tiếng Việt, nên thời gian còn lại mới
     // khớp với cảm nhận; lấy thẳng wpm sẽ luôn báo ngắn hơn thực tế ~15%.
     const wordsLeft = (total - state.idx) * state.chunkSize;
-    $("#left").textContent = "còn " + fmtTime(wordsLeft / (effectiveWpm() / 60));
+    $("#left").textContent = tr("dock.left", { time: fmtTime(wordsLeft / (effectiveWpm() / 60)) });
 
     // Vùng tốc độ: nghiên cứu RSVP cho thấy tới ~350 WPM khả năng hiểu ngang
     // đọc thường, vượt lên thì tụt rõ rệt.
     const z = $("#zone");
-    if (state.wpm <= 350) { z.dataset.zone = "safe"; z.textContent = "giữ được hiểu"; }
-    else if (state.wpm <= 500) { z.dataset.zone = "skim"; z.textContent = "đọc lướt"; }
-    else { z.dataset.zone = "scan"; z.textContent = "chỉ quét ý"; }
+    if (state.wpm <= 350) { z.dataset.zone = "safe"; z.textContent = tr("zone.safe"); }
+    else if (state.wpm <= 500) { z.dataset.zone = "skim"; z.textContent = tr("zone.skim"); }
+    else { z.dataset.zone = "scan"; z.textContent = tr("zone.scan"); }
 
     $("#ready").hidden = state.started;
     updateFocusOverlay();
@@ -937,7 +1004,7 @@
     const sel = $("#voice");
     const voices = speechSynthesis.getVoices();
     if (!voices.length) return;
-    const want = state.vietnamese ? "vi" : "en";
+    const want = E.profile(state.docLang).ttsLang;
     const sorted = [...voices].sort((a, b) => {
       const av = a.lang.toLowerCase().startsWith(want) ? 0 : 1;
       const bv = b.lang.toLowerCase().startsWith(want) ? 0 : 1;
@@ -1028,7 +1095,7 @@
     const items = E.buildOutline(state.blocks, state.tokens);
     const list = $("#outlineList");
     if (!items.length) {
-      list.innerHTML = '<div class="empty">Trang này không có tiêu đề mục nào để dựng dàn bài.</div>';
+      list.innerHTML = '<div class="empty">' + esc(tr("outline.empty")) + '</div>';
       return;
     }
     const total = Math.max(1, state.tokens.length);
@@ -1043,7 +1110,7 @@
             <span class="outline-pos">${Math.round((it.token / total) * 100)}%</span>
           </button>
           <button class="outline-quiz" data-from="${it.token}" data-to="${to}"
-            title="Kiểm tra riêng mục này" aria-label="Kiểm tra mục ${esc(it.text)}">?</button>
+            title="${esc(tr("outline.quiz"))}" aria-label="${esc(tr("outline.quiz.a11y", { name: it.text }))}">?</button>
         </div>`;
       })
       .join("");
@@ -1068,8 +1135,8 @@
     openQuiz({
       from, upTo: to,
       count: 4,
-      title: it ? "Mục: " + it.text : "Kiểm tra mục này",
-      emptyMsg: "Mục này quá ngắn để tạo câu hỏi. Hãy thử mục dài hơn, hoặc bấm Q để kiểm tra cả bài."
+      title: it ? tr("outline.section", { name: it.text }) : tr("outline.sectionShort"),
+      emptyMsg: tr("outline.tooShort")
     });
   }
 
@@ -1112,7 +1179,7 @@
     if (rounds.length < 2) {
       state.training = null;
       $("#trainBody").innerHTML =
-        '<div class="empty">Phần còn lại của bài quá ngắn để luyện. Hãy quay về đầu bài (phím <b>R</b>) rồi thử lại.</div>';
+        '<div class="empty">' + tr("train.tooShort", { key: "<b>R</b>" }) + '</div>';
       panel("#train", true);
       return;
     }
@@ -1136,8 +1203,7 @@
     syncControls();
     render();
     panel("#train", false);
-    flash("Vòng " + (state.training.i + 1) + "/" + state.training.rounds.length +
-          " — " + r.wpm + " WPM");
+    flash(tr("train.round", { i: state.training.i + 1, n: state.training.rounds.length, wpm: r.wpm }));
     // Cho một nhịp để đọc thông báo rồi mới chạy
     setTimeout(() => { if (state.training && state.training.active) play(); }, 900);
   }
@@ -1148,7 +1214,7 @@
     openQuiz({
       from: r.from,
       count: ROUND_QUESTIONS,
-      title: "Vòng " + (state.training.i + 1) + " · " + r.wpm + " WPM",
+      title: tr("train.roundLabel", { i: state.training.i + 1, wpm: r.wpm }),
       onGraded: (score, total) => {
         r.score = score; r.total = total;
         state.training.i++;
@@ -1180,16 +1246,15 @@
     }).join("");
 
     const advice = best
-      ? 'Ở <b>' + best.wpm + ' WPM</b> bạn vẫn hiểu tốt (' + pctOf(best) + '%). Đây là tốc độ nên dùng cho loại nội dung này.'
-      : 'Chưa mức nào đạt 80%. Hãy thử lại từ <b>' + clampRange(rounds[0].wpm - 100, LIMIT.wpm) +
-        ' WPM</b> — hoặc dùng chế độ Dẫn dòng cho bài khó như thế này.';
+      ? tr("train.best", { wpm: best.wpm, pct: pctOf(best) })
+      : tr("train.none", { wpm: clampRange(rounds[0].wpm - 100, LIMIT.wpm) });
 
     $("#trainBody").innerHTML =
-      '<p class="quiz-intro">Kết quả buổi luyện trên chính bài đang đọc.</p>' + rows +
+      '<p class="quiz-intro">' + esc(tr("train.summary")) + '</p>' + rows +
       '<div class="quiz-result" style="margin-top:16px"><span>' + advice + '</span></div>' +
       '<div class="hl-actions">' +
-      (best ? '<button class="quiz-review" id="trainApply">Dùng ' + best.wpm + ' WPM</button>' : '') +
-      '<button class="quiz-review" id="trainAgain">Luyện tiếp phần sau</button>' +
+      (best ? '<button class="quiz-review" id="trainApply">' + esc(tr("train.apply", { wpm: best.wpm })) + '</button>' : '') +
+      '<button class="quiz-review" id="trainAgain">' + esc(tr("train.again")) + '</button>' +
       '</div>';
 
     const apply = $("#trainApply");
@@ -1198,7 +1263,7 @@
       state.training = null;   // đừng để stopTraining() khôi phục tốc độ cũ
       applyStyle(); syncControls(); render(); save();
       panel("#train", false);
-      flash("Đã đặt " + best.wpm + " WPM");
+      flash(tr("train.applied", { wpm: best.wpm }));
     });
     $("#trainAgain").addEventListener("click", () => { stopTraining(); startTraining(); });
   }
@@ -1236,21 +1301,21 @@
       : (scope === "all" ? state.tokens.length - 1 : state.idx);
     const count = o.count || (fixedRange ? 4 : quizCount(scope));
 
-    const qs = E.buildQuiz(state.tokens, upTo, count, state.vietnamese, from, state.blocks);
+    const qs = E.buildQuiz(state.tokens, upTo, count, state.docLang, from, state.blocks);
     const body = $("#quizBody");
     state.quizScope = scope;
 
     // Bộ chọn phạm vi — chỉ hiện khi đang kiểm tra cả bài chứ không phải một mục
     const scopeBar = fixedRange ? "" : `
-      <div class="quiz-scope" role="group" aria-label="Phạm vi kiểm tra">
+      <div class="quiz-scope" role="group" aria-label="${esc(tr("quiz.scope"))}">
         <button class="seg${scope === "read" ? " on" : ""}" data-scope="read"
-          ${state.idx < 25 ? "disabled title='Đọc thêm một chút rồi mới kiểm tra riêng phần đã đọc được'" : ""}>Phần đã đọc</button>
-        <button class="seg${scope === "all" ? " on" : ""}" data-scope="all">Cả bài</button>
+          ${state.idx < 25 ? `disabled title="${esc(tr("quiz.scope.locked"))}"` : ""}>${esc(tr("quiz.scope.read"))}</button>
+        <button class="seg${scope === "all" ? " on" : ""}" data-scope="all">${esc(tr("quiz.scope.all"))}</button>
       </div>`;
 
     if (!qs.length) {
       body.innerHTML = scopeBar + '<div class="empty">' +
-        esc(o.emptyMsg || "Nội dung quá ngắn để tạo câu hỏi có nghĩa.") + '</div>';
+        esc(o.emptyMsg || tr("quiz.empty")) + '</div>';
       wireScope(body, o);
       if (o.onGraded) setTimeout(() => o.onGraded(0, 0), 50);
       panel("#quiz", true);
@@ -1261,7 +1326,7 @@
     body.innerHTML = `
       ${o.title ? `<div class="quiz-round">${esc(o.title)}</div>` : ""}
       ${scopeBar}
-      <p class="quiz-intro">Điền từ còn thiếu. Đây là cách tự kiểm tra xem bạn thật sự hiểu hay chỉ đang nhìn chữ chạy.</p>
+      <p class="quiz-intro">${esc(tr("quiz.intro"))}</p>
       ${qs.map((q, i) => `
         <div class="quiz-q" data-q="${q.id}">
           <div class="quiz-prompt">
@@ -1273,7 +1338,7 @@
           </div>
           <div class="quiz-context" data-q="${q.id}" hidden></div>
         </div>`).join("")}
-      <button class="primary" id="quizSubmit">Chấm điểm</button>
+      <button class="primary" id="quizSubmit">${esc(tr("quiz.submit"))}</button>
       <div class="quiz-result" id="quizResult" hidden></div>`;
 
     wireScope(body, o);
@@ -1286,8 +1351,8 @@
       const done = Object.keys(state.quiz.answers).length;
       submit.disabled = done < qs.length;
       submit.textContent = done < qs.length
-        ? `Chấm điểm — còn ${qs.length - done} câu`
-        : "Chấm điểm";
+        ? tr("quiz.submitLeft", { n: qs.length - done })
+        : tr("quiz.submit");
     };
 
     body.querySelectorAll(".quiz-opt").forEach((b) =>
@@ -1334,7 +1399,7 @@
         const ctx = $(`.quiz-context[data-q="${q.id}"]`);
         ctx.hidden = false;
         ctx.innerHTML = `<p>“${highlightAnswer(q.sentence, q.answer)}”</p>
-          <button class="quiz-review" data-token="${q.token}">↺ Xem lại đoạn này</button>`;
+          <button class="quiz-review" data-token="${q.token}">${esc(tr("quiz.review"))}</button>`;
         ctx.querySelector(".quiz-review").addEventListener("click", () => {
           jumpTo(parseInt(q.token, 10));
           panel("#quiz", false);
@@ -1343,14 +1408,14 @@
     });
 
     const pct = Math.round((score / questions.length) * 100);
-    let advice;
-    if (pct >= 80) advice = `Tốt. ${state.wpm} WPM đang phù hợp với bạn ở loại nội dung này — có thể thử tăng 50.`;
-    else if (pct >= 60) advice = `Tạm được, nhưng đang mất chi tiết. Giữ nguyên tốc độ hoặc giảm 50 WPM.`;
-    else advice = `Đang quá nhanh. Hãy giảm xuống ${Math.max(150, state.wpm - 100)} WPM và đọc lại đoạn này.`;
+    const advice = pct >= 80 ? tr("quiz.advice.good", { wpm: state.wpm })
+      : pct >= 60 ? tr("quiz.advice.ok")
+      : tr("quiz.advice.bad", { wpm: Math.max(150, state.wpm - 100) });
 
     const r = $("#quizResult");
     r.hidden = false;
-    r.innerHTML = `<b>${score}/${questions.length}</b> đúng (${pct}%) ở tốc độ ${state.wpm} WPM.<br><span>${advice}</span>`;
+    r.innerHTML = tr("quiz.result", { score, total: questions.length, pct, wpm: state.wpm }) +
+      `<br><span>${advice}</span>`;
     $("#quizSubmit").disabled = true;
 
     // Mỗi lần sinh lại là một bộ câu hỏi khác — làm lại được ngay để ôn thêm
@@ -1358,7 +1423,7 @@
       const again = document.createElement("button");
       again.className = "quiz-review";
       again.id = "quizAgain";
-      again.textContent = "↻ Bộ câu hỏi khác";
+      again.textContent = tr("quiz.again");
       again.style.marginTop = "12px";
       again.addEventListener("click", () => openQuiz(state.quiz.opts || {}));
       r.appendChild(again);
@@ -1374,7 +1439,7 @@
       const btn = document.createElement("button");
       btn.className = "primary";
       btn.id = "quizNext";
-      btn.textContent = "Vòng tiếp theo →";
+      btn.textContent = tr("train.next");
       btn.addEventListener("click", () => { panel("#quiz", false); cb(score, questions.length); });
       $("#quizBody").appendChild(btn);
     }
@@ -1452,12 +1517,12 @@
     const cur = currentSentence();
     if (!cur) return;
     if (state.highlights.some((h) => h.text === cur.text)) {
-      flash("Câu này đã có trong danh sách");
+      flash(tr("hl.dup"));
       return;
     }
     state.highlights.push({ text: cur.text, token: cur.token, at: Date.now() });
     persistHighlights();
-    flash("Đã lưu trích đoạn (" + state.highlights.length + ")");
+    flash(tr("hl.saved", { n: state.highlights.length }));
   }
 
   // Báo ngắn gọn ngay trên vùng chữ — bấm H mà không thấy phản hồi gì thì
@@ -1479,13 +1544,13 @@
   const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trim() + "…" : t);
 
   function highlightsMarkdown() {
-    const head = "# " + (state.docTitle || "Trích đoạn") + "\n\n" +
+    const head = "# " + (state.docTitle || tr("hl.fileTitle")) + "\n\n" +
       (state.docUrl ? state.docUrl + "\n\n" : "");
     return head + state.highlights.map((h) => "> " + h.text).join("\n\n") + "\n";
   }
 
   function safeFileName(name) {
-    return String(name || "trich-doan").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
+    return String(name || "lamp").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60);
   }
 
   function renderHighlights() {
@@ -1495,31 +1560,30 @@
     // trước đây người dùng mở bảng, thấy rỗng, tưởng tính năng hỏng.
     const cur = currentSentence();
     const saveBtn =
-      '<button class="primary hl-save" id="hlSave" style="margin-top:0">＋ Lưu câu đang đọc</button>' +
+      '<button class="primary hl-save" id="hlSave" style="margin-top:0">' + esc(tr("hl.save")) + '</button>' +
       (cur ? '<div class="hl-preview">“' + esc(cut(cur.text, 150)) + '”</div>' : "");
 
     if (!state.highlights.length) {
       body.innerHTML = saveBtn +
-        '<div class="empty" style="margin-top:14px">Chưa lưu trích đoạn nào. ' +
-        'Bấm nút trên, hoặc nhấn <b>H</b> bất cứ lúc nào đang đọc.</div>';
+        '<div class="empty" style="margin-top:14px">' + tr("hl.empty", { key: "<b>H</b>" }) + '</div>';
       wireHlSave(body);
       return;
     }
     body.innerHTML = saveBtn +
-      '<p class="quiz-intro" style="margin-top:16px">' + state.highlights.length +
-      ' trích đoạn từ bài này. Bấm vào một câu để nhảy về đúng chỗ đó.</p>' +
+      '<p class="quiz-intro" style="margin-top:16px">' +
+      esc(tr("hl.count", { n: state.highlights.length })) + '</p>' +
       '<div class="hl-list">' +
       state.highlights.map(function (h, i) {
         return '<div class="hl-item">' +
           '<button class="hl-text" data-token="' + h.token + '">' + esc(h.text) + '</button>' +
-          '<button class="hl-del" data-i="' + i + '" title="Xoá" aria-label="Xoá">×</button>' +
+          '<button class="hl-del" data-i="' + i + '" title="' + esc(tr("btn.delete")) + '" aria-label="' + esc(tr("btn.delete")) + '">×</button>' +
           '</div>';
       }).join("") +
       '</div>' +
       '<div class="hl-actions">' +
-      '<button class="quiz-review" id="hlCopy">Chép dạng Markdown</button>' +
-      '<button class="quiz-review" id="hlDownload">Tải file .md</button>' +
-      '<button class="quiz-review" id="hlClear">Xoá hết</button>' +
+      '<button class="quiz-review" id="hlCopy">' + esc(tr("hl.copy")) + '</button>' +
+      '<button class="quiz-review" id="hlDownload">' + esc(tr("hl.download")) + '</button>' +
+      '<button class="quiz-review" id="hlClear">' + esc(tr("btn.clearAll")) + '</button>' +
       '</div>';
 
     wireHlSave(body);
@@ -1539,9 +1603,9 @@
     body.querySelector("#hlCopy").addEventListener("click", async function () {
       try {
         await navigator.clipboard.writeText(highlightsMarkdown());
-        flash("Đã chép vào clipboard");
+        flash(tr("hl.copied"));
       } catch (e) {
-        flash("Trang này không cho chép — hãy dùng Tải file");
+        flash(tr("hl.copyFail"));
       }
     });
     body.querySelector("#hlDownload").addEventListener("click", function () {
@@ -1621,11 +1685,11 @@
 
     $("#stats").innerHTML = `
       <div class="stat-grid">
-        <div><b>${totalWords.toLocaleString("vi-VN")}</b><small>từ, 7 ngày qua</small></div>
-        <div><b>${fmtTime(totalMs / 1000)}</b><small>thời gian đọc</small></div>
-        <div><b>${avgWpm || "—"}</b><small>WPM thực tế</small></div>
+        <div><b>${I.num(totalWords)}</b><small>${esc(tr("stats.words"))}</small></div>
+        <div><b>${fmtTime(totalMs / 1000)}</b><small>${esc(tr("stats.time"))}</small></div>
+        <div><b>${avgWpm || "—"}</b><small>${esc(tr("stats.wpm"))}</small></div>
       </div>
-      ${rows ? `<div class="group-label" style="margin-top:14px">Điểm kiểm tra theo tốc độ</div>${rows}` : ""}`;
+      ${rows ? `<div class="group-label" style="margin-top:14px">${esc(tr("stats.byWpm"))}</div>${rows}` : ""}`;
   }
 
   // ============================ LƯU TRỮ ============================
@@ -1725,13 +1789,14 @@
       if (settings && settings[k] !== undefined) state[k] = settings[k];
     });
 
+    // Phải đặt ngôn ngữ trước khi markup() chạy, vì chuỗi được nhúng lúc dựng
+    I.setLang(state.lang);
+
     const ex = window.__lampExtract(forceSelection);
     const blocks = ex.blocks || [];
     const joined = blocks.map((b) => b.text).join(" ");
     if (joined.trim().length < 40) {
-      alert(forceSelection
-        ? "Lamp: đoạn bạn bôi đen quá ngắn hoặc chưa chọn gì. Hãy tô đen đoạn văn muốn đọc rồi thử lại."
-        : "Lamp: không tìm thấy nội dung đủ dài trên trang này.\nThử bôi đen đoạn văn muốn đọc rồi bấm chuột phải chọn “Đọc nhanh đoạn này bằng Lamp”.");
+      alert(forceSelection ? tr("msg.noSelection") : tr("msg.noContent"));
       return;
     }
 
@@ -1739,8 +1804,10 @@
     // Nguồn khai báo ngôn ngữ (EPUB có dc:language) thì tin nó; không thì mới
     // đoán qua dấu thanh. Sách tiếng Việt mà chương đầu đầy tên riêng nước
     // ngoài rất dễ bị đoán trượt.
-    state.vietnamese = ex.lang ? /^vi/i.test(ex.lang) : E.detectVietnamese(joined);
-    state.tokens = E.buildTokens(blocks, state.chunkSize);
+    // Nguồn khai báo ngôn ngữ (EPUB có dc:language) thì tin nó; không thì đoán.
+    state.docLang = E.detectLang(joined, ex.lang);
+    state.vietnamese = state.docLang === "vi";
+    state.tokens = E.buildTokens(blocks, state.chunkSize, state.docLang);
     // Trang xem PDF luôn có cùng URL nên mọi file PDF mở từ máy sẽ dùng chung
     // một khoá tiến trình — thêm tên tài liệu vào khoá để tách chúng ra.
     // Ở chế độ cửa sổ riêng, location.href là URL của chính trang reader.html
@@ -1750,7 +1817,7 @@
     state.docKey = (baseUrl +
       (ex.source === "pdf" ? "#" + (ex.title || "") : "")).slice(0, 300);
     state.docUrl = baseUrl;
-    state.docTitle = (ex.title || state.docUrl || "Không tên").slice(0, 200);
+    state.docTitle = (ex.title || state.docUrl || tr("doc.untitled")).slice(0, 200);
     state.docKind = ex.source !== "pdf" ? "web"
       : (/[?&]file=/.test(location.search) ? "pdf-url" : "pdf-local");
     state.playing = false;
@@ -1775,7 +1842,7 @@
     if (state.idx > 0) state.started = true;
 
     $("#docTitle").textContent = ex.source === "selection"
-      ? "Đoạn đã chọn" + (ex.title ? " · " + ex.title : "")
+      ? tr("doc.selection") + (ex.title ? " · " + ex.title : "")
       : (ex.title || "");
     $("#rsvpView").hidden = state.mode !== "rsvp";
     $("#guideView").hidden = state.mode !== "guide";

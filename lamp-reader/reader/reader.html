@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lamp — Đọc nhanh</title>
+<title data-i18n="win.title">Lamp</title>
 <style>
   html, body { height: 100%; margin: 0; background: #14120E; }
   /* Overlay của reader.js phủ kín cửa sổ; phần dưới đây chỉ hiện khi chưa nạp
@@ -23,7 +23,7 @@
 <body>
   <div class="fallback" id="fallback" hidden>
     <h1>Lamp</h1>
-    <p id="fallbackMsg">Không còn nội dung để đọc. Hãy quay lại trang web và nhấn <b>Alt+R</b> lần nữa.</p>
+    <p id="fallbackMsg"></p>
   </div>
 
   <script>
@@ -32,6 +32,7 @@
     window.__lampCloseAction = "window";
   </script>
   <script src="../content/defaults.js"></script>
+  <script src="../content/i18n.js"></script>
   <script src="../content/engine.js"></script>
   <script src="../content/reader.js"></script>
   <script src="boot.js"></script>

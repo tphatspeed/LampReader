@@ -11,6 +11,7 @@
 
 (() => {
   if (window.__lampEpub) return;
+  const T = (k, v) => (self.__lampI18n ? self.__lampI18n.t(k, v) : k);
 
   // ---------- Đọc ZIP ----------
 
@@ -31,7 +32,7 @@
   function readEntries(buf) {
     const view = new DataView(buf);
     const eocd = findEOCD(view);
-    if (eocd < 0) throw new Error("Không phải file ZIP hợp lệ (thiếu EOCD)");
+    if (eocd < 0) throw new Error(T("epub.badZip"));
 
     const count = view.getUint16(eocd + 10, true);
     let p = view.getUint32(eocd + 16, true);
@@ -71,7 +72,7 @@
     const raw = new Uint8Array(buf, start, e.compSize);
     if (e.method === 0) return raw;            // lưu nguyên, không nén
     if (e.method === 8) return inflateRaw(raw); // deflate
-    throw new Error("Kiểu nén ZIP chưa hỗ trợ: " + e.method);
+    throw new Error(T("epub.badMethod", { n: e.method }));
   }
 
   const decodeText = (bytes) => new TextDecoder("utf-8").decode(bytes);
@@ -151,20 +152,20 @@
     // 0. EPUB có DRM: chữ bên trong đã bị mã hoá, giải nén ra cũng chỉ là rác.
     //    Báo đúng lý do thay vì để người dùng nhận một lỗi khó hiểu.
     if (zip.entries.has("META-INF/encryption.xml")) {
-      throw new Error("Sách này có khoá bản quyền (DRM) nên không đọc được chữ bên trong");
+      throw new Error(T("epub.drm"));
     }
 
     // 1. container.xml chỉ ra file .opf nằm đâu
     const containerRaw = await readFile(zip, buf, "META-INF/container.xml");
-    if (!containerRaw) throw new Error("Thiếu META-INF/container.xml — file này không phải EPUB");
+    if (!containerRaw) throw new Error(T("epub.noContainer"));
     const container = new DOMParser().parseFromString(decodeText(containerRaw), "text/xml");
     const rootEl = container.querySelector("rootfile");
     const opfPath = rootEl && rootEl.getAttribute("full-path");
-    if (!opfPath) throw new Error("container.xml không chỉ ra file OPF");
+    if (!opfPath) throw new Error(T("epub.noOpf"));
 
     // 2. OPF: tên sách + thứ tự các chương (spine)
     const opfRaw = await readFile(zip, buf, opfPath);
-    if (!opfRaw) throw new Error("Không đọc được file OPF: " + opfPath);
+    if (!opfRaw) throw new Error(T("epub.badOpf", { path: opfPath }));
     const opf = new DOMParser().parseFromString(decodeText(opfRaw), "text/xml");
 
     let title = "";
@@ -192,7 +193,7 @@
       .filter(Boolean)
       .map((href) => resolvePath(opfPath, href));
 
-    if (!spine.length) throw new Error("EPUB không có chương nào đọc được");
+    if (!spine.length) throw new Error(T("epub.noSpine"));
 
     // 3. Bóc chữ từng chương theo đúng thứ tự spine
     const seen = new Set();
@@ -205,7 +206,7 @@
       blocks = blocks.concat(xhtmlToBlocks(decodeText(bytes), seen));
     }
 
-    if (!blocks.length) throw new Error("Không bóc được chữ nào từ EPUB này");
+    if (!blocks.length) throw new Error(T("epub.noText"));
     return { title, lang, blocks, chapters: spine.length };
   }
 

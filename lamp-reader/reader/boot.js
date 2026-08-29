@@ -6,9 +6,16 @@
 // storage.session (tự xoá khi đóng trình duyệt) rồi chỉ chuyển một mã ngắn.
 
 (async () => {
+  const T = (k, v) => (self.__lampI18n ? self.__lampI18n.t(k, v) : k);
+  if (self.__lampI18n) {
+    const g = await chrome.storage.sync.get({ lang: "auto" });
+    self.__lampI18n.setLang(g.lang);
+    self.__lampI18n.apply();
+  }
+
   const fail = (msg) => {
     const box = document.getElementById("fallback");
-    if (msg) document.getElementById("fallbackMsg").textContent = msg;
+    document.getElementById("fallbackMsg").innerHTML = msg || T("win.expired");
     box.hidden = false;
   };
 
@@ -27,11 +34,12 @@
 
   if (!doc || !doc.blocks || !doc.blocks.length) { fail(); return; }
 
-  document.title = doc.title ? doc.title + " — Lamp" : "Lamp — Đọc nhanh";
+  document.title = doc.title ? doc.title + " — Lamp" : T("win.title");
 
   // reader.js lấy nội dung qua window.__lampExtract() — đưa sẵn kết quả vào
   window.__lampExtract = () => doc;
 
   const settings = await chrome.storage.sync.get(null);
+  if (self.__lampI18n) self.__lampI18n.setLang(settings.lang);
   await window.__lampReader.open(settings);
 })();

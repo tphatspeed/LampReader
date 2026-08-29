@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Lamp — Đọc nhanh RSVP",
-  "version": "1.8.1",
-  "description": "Đọc nhanh trang web, PDF và EPUB bằng kỹ thuật RSVP trong một cửa sổ đọc riêng. Nhấn Alt+R để bắt đầu.",
+  "name": "__MSG_appName__",
+  "version": "2.0.0",
+  "description": "__MSG_appDesc__",
   "permissions": [
     "activeTab",
     "scripting",
@@ -16,7 +16,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Lamp — Đọc nhanh",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -34,7 +34,7 @@
       "suggested_key": {
         "default": "Alt+R"
       },
-      "description": "Bật/tắt trình đọc nhanh trên trang hiện tại"
+      "description": "__MSG_cmdToggle__"
     }
   },
   "web_accessible_resources": [
@@ -50,5 +50,6 @@
         "<all_urls>"
       ]
     }
-  ]
+  ],
+  "default_locale": "en"
 }

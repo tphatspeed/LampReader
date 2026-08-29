@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Lamp — Đọc PDF</title>
+<title data-i18n="pdf.title">Lamp</title>
 <style>
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -93,23 +93,22 @@
     <h1>Lamp</h1>
     <span>PDF · EPUB</span>
   </div>
-  <div class="sub">Trích xuất chữ từ PDF hoặc EPUB rồi đọc nhanh bằng RSVP.</div>
+  <div class="sub" data-i18n="pdf.sub"></div>
 
   <div class="card">
     <label class="drop" id="drop">
-      <strong>Chọn file PDF hoặc EPUB</strong>
-      <small>hoặc kéo thả file vào đây</small>
+      <strong data-i18n="pdf.pick"></strong>
+      <small data-i18n="pdf.drop"></small>
       <input type="file" id="file" accept="application/pdf,.pdf,application/epub+zip,.epub">
     </label>
     <div class="bar" id="bar"><i id="barFill"></i></div>
-    <div class="status" id="status">Chưa chọn file nào.</div>
+    <div class="status" id="status" data-i18n="pdf.none"></div>
   </div>
 
-  <div class="note">
-    PDF dạng ảnh quét không có lớp chữ nên không trích xuất được — trường hợp đó cần OCR.
-  </div>
+  <div class="note" data-i18n="pdf.note"></div>
 
   <script src="../content/defaults.js"></script>
+  <script src="../content/i18n.js"></script>
   <script src="../content/epub.js"></script>
   <script src="../content/engine.js"></script>
   <script src="../content/reader.js"></script>

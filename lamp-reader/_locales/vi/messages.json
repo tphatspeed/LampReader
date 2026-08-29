@@ -1,0 +1,14 @@
+{
+  "appName": {
+    "message": "Lamp — Đọc nhanh RSVP"
+  },
+  "appDesc": {
+    "message": "Đọc nhanh trang web, PDF và EPUB bằng kỹ thuật RSVP trong một cửa sổ đọc riêng. Nhấn Alt+R để bắt đầu."
+  },
+  "cmdToggle": {
+    "message": "Bật trình đọc nhanh trên trang hiện tại"
+  },
+  "actionTitle": {
+    "message": "Lamp — Đọc nhanh"
+  }
+}

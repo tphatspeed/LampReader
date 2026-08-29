@@ -1,4 +1,7 @@
-# macOS
+# macOS — Finder rải file này khắp nơi mỗi lần mở thư mục.
+# Nó KHÔNG chỉ bẩn repo: một cái nằm trong lamp-reader/_locales/ là đủ làm
+# Chrome hỏng phần đa ngôn ngữ, vì Chrome duyệt thư mục con ở đó để tìm locale.
+# test/qa.test.js có phép kiểm bắt lại chuyện này trước khi đóng gói.
 .DS_Store
 **/.DS_Store
 
@@ -11,9 +14,3 @@
 *.zip
 lamp-reader.crx
 lamp-reader.pem
-lamp-reader/.DS_Store
-.DS_Store
-.DS_Store
-lamp-reader/.DS_Store
-lamp-reader/fonts/.DS_Store
-.DS_Store
